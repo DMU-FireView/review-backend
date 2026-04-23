@@ -4,6 +4,7 @@ import com.example.fireview.domain.auth.dto.LoginRequest;
 import com.example.fireview.domain.auth.dto.LoginResponse;
 import com.example.fireview.domain.auth.dto.PasswordResetRequest;
 import com.example.fireview.domain.auth.dto.SignupRequest;
+import com.example.fireview.domain.user.entity.OAuthProvider;
 import com.example.fireview.domain.user.entity.Role;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
@@ -50,6 +51,7 @@ public class AuthService {
                 .password(passwordEncoder.encode(request.password()))
                 .nickname(request.nickname())
                 .role(Role.USER)
+                .provider(OAuthProvider.LOCAL)
                 .onboardingCompleted(false)
                 .build();
         userRepository.save(user);
