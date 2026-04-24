@@ -10,21 +10,11 @@ import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
+import com.example.fireview.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Instant;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -33,13 +23,8 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtEncoder jwtEncoder;
-
-    @Value("${jwt.expiration-ms}")
-    private long jwtExpirationMs;
-
-    // In-memory store for password reset tokens (production: use Redis)
-    private final Map<String, String> resetTokenStore = new ConcurrentHashMap<>();
+    private final JwtTokenProvider jwtTokenProvider;
+    private final PasswordResetTokenStore resetTokenStore;
 
     @Transactional
     public void signup(SignupRequest request) {
@@ -65,7 +50,7 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
         }
 
-        String token = generateToken(user);
+        String token = jwtTokenProvider.generateToken(user);
         return new LoginResponse(token, user.getEmail(), user.getNickname(), user.getRole(), user.isOnboardingCompleted());
     }
 
@@ -73,15 +58,12 @@ public class AuthService {
         userRepository.findByEmail(email)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        String token = UUID.randomUUID().toString();
-        resetTokenStore.put(token, email);
-        // In production: send email with reset link
-        return token;
+        return resetTokenStore.issue(email);
     }
 
     @Transactional
     public void resetPassword(PasswordResetRequest request) {
-        String email = resetTokenStore.get(request.token());
+        String email = resetTokenStore.consume(request.token());
         if (email == null) {
             throw new CustomException(ErrorCode.INVALID_RESET_TOKEN);
         }
@@ -90,20 +72,5 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
-        resetTokenStore.remove(request.token());
-    }
-
-    private String generateToken(User user) {
-        Instant now = Instant.now();
-        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer("fireview")
-                .issuedAt(now)
-                .expiresAt(now.plusMillis(jwtExpirationMs))
-                .subject(user.getEmail())
-                .claim("role", user.getRole().name())
-                .claim("userId", user.getId())
-                .build();
-        return jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 }
