@@ -1,5 +1,7 @@
 package com.example.fireview.global.config;
 
+import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
+import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -21,9 +23,15 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtDecoder jwtDecoder;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
-    public SecurityConfig(JwtDecoder jwtDecoder) {
+    public SecurityConfig(JwtDecoder jwtDecoder,
+                          CustomOAuth2UserService customOAuth2UserService,
+                          OAuth2SuccessHandler oAuth2SuccessHandler) {
         this.jwtDecoder = jwtDecoder;
+        this.customOAuth2UserService = customOAuth2UserService;
+        this.oAuth2SuccessHandler = oAuth2SuccessHandler;
     }
 
     @Bean
@@ -31,8 +39,9 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // OAuth2 인가 코드 흐름 중 state 저장을 위해 세션 허용 (IF_REQUIRED)
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
@@ -43,9 +52,17 @@ public class SecurityConfig {
                         .requestMatchers("/api/keywords/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        // OAuth2 로그인 진입 경로 허용
+                        .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .anyRequest().authenticated())
+                // JWT 기반 API 인증
                 .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)));
+                        oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)))
+                // OAuth2 소셜 로그인
+                .oauth2Login(oauth2 -> oauth2
+                        .userInfoEndpoint(userInfo ->
+                                userInfo.userService(customOAuth2UserService))
+                        .successHandler(oAuth2SuccessHandler));
 
         return http.build();
     }
