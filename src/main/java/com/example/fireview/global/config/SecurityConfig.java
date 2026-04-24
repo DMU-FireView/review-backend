@@ -2,6 +2,7 @@ package com.example.fireview.global.config;
 
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -25,13 +26,16 @@ public class SecurityConfig {
     private final JwtDecoder jwtDecoder;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final List<String> allowedOrigins;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
-                          OAuth2SuccessHandler oAuth2SuccessHandler) {
+                          OAuth2SuccessHandler oAuth2SuccessHandler,
+                          @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+        this.allowedOrigins = allowedOrigins;
     }
 
     @Bean
@@ -75,7 +79,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOrigins(allowedOrigins);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
