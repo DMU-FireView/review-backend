@@ -38,3 +38,4 @@ out/
 
 ### Secret & Credentials ###
 src/main/resources/application-secret.properties
+.env
