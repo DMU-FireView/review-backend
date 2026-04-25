@@ -21,4 +21,19 @@ public enum TrustGrade {
         if (score >= 50) return SUSPICIOUS;
         return DANGER;
     }
+
+    /** AI 서버 level 문자열 (safe/warn/danger) → TrustGrade 변환 */
+    public static TrustGrade fromAiLevel(String level) {
+        if (level == null) return SUSPICIOUS;
+        return switch (level.toLowerCase()) {
+            case "safe"   -> SAFE;
+            case "danger" -> DANGER;
+            default       -> SUSPICIOUS; // warn
+        };
+    }
+
+    /** AI 서버 RTI 정수값 → TrustGrade 변환 */
+    public static TrustGrade fromRti(int rti) {
+        return fromScore(rti);
+    }
 }
