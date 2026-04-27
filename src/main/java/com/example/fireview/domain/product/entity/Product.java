@@ -49,4 +49,14 @@ public class Product {
         if (reviewCount == null) reviewCount = 0;
         if (avgRating == null) avgRating = 0.0;
     }
+
+    /** AI 서버 분석 결과로 평균 RTI 업데이트 */
+    public void updateAvgRti(double newAvgRti) {
+        this.avgRti = newAvgRti;
+    }
+
+    /** AI 서버 분석 결과로 리뷰 수 업데이트 */
+    public void updateReviewCount(int count) {
+        this.reviewCount = count;
+    }
 }

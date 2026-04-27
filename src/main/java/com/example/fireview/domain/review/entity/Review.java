@@ -62,4 +62,10 @@ public class Review {
         createdAt = LocalDateTime.now();
         if (isVerifiedPurchase == null) isVerifiedPurchase = false;
     }
+
+    /** AI 서버로부터 받은 RTI 점수와 등급을 업데이트합니다. */
+    public void updateRtiScore(int rti) {
+        this.rtiScore = (double) rti;
+        this.trustGrade = TrustGrade.fromRti(rti);
+    }
 }
