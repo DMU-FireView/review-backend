@@ -40,18 +40,19 @@ public class AiAnalysisService {
     /**
      * 상품 ID로 AI 분석 실행
      *
-     * @param productId 네이버 상품 ID (예: "7195971829")
+     * @param productId  네이버 상품 ID (예: "7195971829")
+     * @param productUrl 상품 페이지 URL (optional, AI 서버 크롤링 보조)
      * @return 프론트엔드에 전달할 통합 분석 결과
      */
     @Transactional
-    public ProductAnalysisResponse analyzeProduct(String productId) {
-        log.info("[AI Analysis] 분석 시작: productId={}", productId);
+    public ProductAnalysisResponse analyzeProduct(String productId, String productUrl) {
+        log.info("[AI Analysis] 분석 시작: productId={}, productUrl={}", productId, productUrl);
 
         // 1. DB에서 해당 상품의 리뷰 조회 (product.platform 이나 이름으로 매칭되는 상품 먼저 탐색)
         //    리뷰가 없으면 빈 배열로 AI 서버에 요청 (AI 서버가 product_id 기반으로 크롤링)
         List<AiReviewItem> reviewItems = buildReviewItems(productId);
 
-        AiAnalyzeRequest request = new AiAnalyzeRequest(reviewItems);
+        AiAnalyzeRequest request = new AiAnalyzeRequest(productUrl, reviewItems);
         log.info("[AI Analysis] AI 서버 요청 준비 완료: 리뷰 수={}", reviewItems.size());
 
         // 2. AI 서버 3개 API 호출
