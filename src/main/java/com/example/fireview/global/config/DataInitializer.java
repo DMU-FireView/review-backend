@@ -3,6 +3,7 @@ package com.example.fireview.global.config;
 import com.example.fireview.domain.dashboard.entity.SearchKeyword;
 import com.example.fireview.domain.dashboard.repository.SearchKeywordRepository;
 import com.example.fireview.domain.product.entity.Category;
+import com.example.fireview.domain.product.entity.PlatformLink;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import com.example.fireview.domain.review.entity.Review;
@@ -82,18 +83,36 @@ public class DataInitializer implements CommandLineRunner {
     private List<Product> createProducts() {
         List<Product> products = new ArrayList<>();
 
-        // 전자기기 (7개)
-        products.add(product("삼성 갤럭시 S25 Ultra", "https://via.placeholder.com/300?text=Galaxy+S25", 1499000L, Category.ELECTRONICS, 82.5, 4.5));
-        products.add(product("LG 그램 17인치 노트북", "https://via.placeholder.com/300?text=LG+Gram", 1890000L, Category.ELECTRONICS, 88.0, 4.7));
-        products.add(product("애플 에어팟 프로 2세대", "https://via.placeholder.com/300?text=AirPods+Pro", 359000L, Category.ELECTRONICS, 91.0, 4.8));
-        products.add(product("소니 WH-1000XM5 헤드폰", "https://via.placeholder.com/300?text=Sony+WH", 429000L, Category.ELECTRONICS, 87.5, 4.6));
-        products.add(product("애플 아이패드 프로 11인치", "https://via.placeholder.com/300?text=iPad+Pro", 1299000L, Category.ELECTRONICS, 85.0, 4.5));
+        // 전자기기 (7개) - 주요 상품에 멀티 플랫폼 링크 추가
+        products.add(product("삼성 갤럭시 S25 Ultra", "https://via.placeholder.com/300?text=Galaxy+S25", 1499000L, Category.ELECTRONICS, 82.5, 4.5,
+                List.of(link("NAVER", 1499000L, "https://smartstore.naver.com/samsung/galaxy-s25-ultra"),
+                        link("COUPANG", 1469000L, "https://www.coupang.com/vp/products/galaxy-s25-ultra"),
+                        link("11ST", 1479000L, "https://www.11st.co.kr/products/galaxy-s25-ultra"))));
+        products.add(product("LG 그램 17인치 노트북", "https://via.placeholder.com/300?text=LG+Gram", 1890000L, Category.ELECTRONICS, 88.0, 4.7,
+                List.of(link("NAVER", 1890000L, "https://smartstore.naver.com/lg/gram-17"),
+                        link("COUPANG", 1850000L, "https://www.coupang.com/vp/products/lg-gram-17"),
+                        link("GMARKET", 1870000L, "https://www.gmarket.co.kr/lg-gram-17"))));
+        products.add(product("애플 에어팟 프로 2세대", "https://via.placeholder.com/300?text=AirPods+Pro", 359000L, Category.ELECTRONICS, 91.0, 4.8,
+                List.of(link("NAVER", 359000L, "https://smartstore.naver.com/apple/airpods-pro-2"),
+                        link("COUPANG", 339000L, "https://www.coupang.com/vp/products/airpods-pro-2"),
+                        link("SSG", 349000L, "https://www.ssg.com/airpods-pro-2"))));
+        products.add(product("소니 WH-1000XM5 헤드폰", "https://via.placeholder.com/300?text=Sony+WH", 429000L, Category.ELECTRONICS, 87.5, 4.6,
+                List.of(link("NAVER", 429000L, "https://smartstore.naver.com/sony/wh-1000xm5"),
+                        link("COUPANG", 399000L, "https://www.coupang.com/vp/products/sony-wh1000xm5"))));
+        products.add(product("애플 아이패드 프로 11인치", "https://via.placeholder.com/300?text=iPad+Pro", 1299000L, Category.ELECTRONICS, 85.0, 4.5,
+                List.of(link("NAVER", 1299000L, "https://smartstore.naver.com/apple/ipad-pro-11"),
+                        link("COUPANG", 1269000L, "https://www.coupang.com/vp/products/ipad-pro-11"))));
         products.add(product("삼성 갤럭시 워치7", "https://via.placeholder.com/300?text=Galaxy+Watch", 299000L, Category.ELECTRONICS, 43.0, 3.6));
         products.add(product("레노버 씽크패드 X1 카본", "https://via.placeholder.com/300?text=ThinkPad", 2190000L, Category.ELECTRONICS, 78.0, 4.3));
 
         // 패션 (5개)
-        products.add(product("나이키 에어맥스 270", "https://via.placeholder.com/300?text=Nike+270", 179000L, Category.FASHION, 78.5, 4.3));
-        products.add(product("뉴발란스 574 클래식", "https://via.placeholder.com/300?text=NB+574", 129000L, Category.FASHION, 85.0, 4.6));
+        products.add(product("나이키 에어맥스 270", "https://via.placeholder.com/300?text=Nike+270", 179000L, Category.FASHION, 78.5, 4.3,
+                List.of(link("NAVER", 179000L, "https://smartstore.naver.com/nike/airmax-270"),
+                        link("COUPANG", 159000L, "https://www.coupang.com/vp/products/nike-airmax-270"),
+                        link("11ST", 169000L, "https://www.11st.co.kr/products/nike-airmax-270"))));
+        products.add(product("뉴발란스 574 클래식", "https://via.placeholder.com/300?text=NB+574", 129000L, Category.FASHION, 85.0, 4.6,
+                List.of(link("NAVER", 129000L, "https://smartstore.naver.com/newbalance/574"),
+                        link("COUPANG", 119000L, "https://www.coupang.com/vp/products/newbalance-574"))));
         products.add(product("아디다스 울트라부스트 22", "https://via.placeholder.com/300?text=Ultraboost", 219000L, Category.FASHION, 55.0, 4.0));
         products.add(product("자라 오버핏 트렌치코트", "https://via.placeholder.com/300?text=Zara+Coat", 159000L, Category.FASHION, 38.0, 3.4));
         products.add(product("유니클로 울트라라이트 다운", "https://via.placeholder.com/300?text=Uniqlo+Down", 89000L, Category.FASHION, 81.0, 4.4));
@@ -137,6 +156,11 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private Product product(String name, String imageUrl, Long price, Category category, double avgRti, double avgRating) {
+        return product(name, imageUrl, price, category, avgRti, avgRating, List.of());
+    }
+
+    private Product product(String name, String imageUrl, Long price, Category category, double avgRti, double avgRating,
+                            List<PlatformLink> platformLinks) {
         return Product.builder()
                 .name(name)
                 .imageUrl(imageUrl)
@@ -145,7 +169,12 @@ public class DataInitializer implements CommandLineRunner {
                 .avgRti(avgRti)
                 .reviewCount(0)
                 .avgRating(avgRating)
+                .platformLinks(new ArrayList<>(platformLinks))
                 .build();
+    }
+
+    private PlatformLink link(String platform, long price, String url) {
+        return new PlatformLink(platform, price, url);
     }
 
     /** 상품별 RTI 수준에 따른 리뷰 생성 */

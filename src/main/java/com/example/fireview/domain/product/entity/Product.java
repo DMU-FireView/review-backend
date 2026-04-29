@@ -4,6 +4,9 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 @Entity
 @Table(name = "products")
@@ -41,6 +44,13 @@ public class Product {
 
     private LocalDateTime createdAt;
 
+    /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "product_platform_links",
+                     joinColumns = @JoinColumn(name = "product_id"))
+    @Builder.Default
+    private List<PlatformLink> platformLinks = new ArrayList<>();
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -58,5 +68,23 @@ public class Product {
     /** AI 서버 분석 결과로 리뷰 수 업데이트 */
     public void updateReviewCount(int count) {
         this.reviewCount = count;
+    }
+
+    /** 최저가 반환 (platformLinks에서 가장 낮은 가격, 없으면 기본 price) */
+    public Long getLowestPrice() {
+        return platformLinks.stream()
+                .filter(l -> l.getPrice() != null)
+                .min(Comparator.comparingLong(PlatformLink::getPrice))
+                .map(PlatformLink::getPrice)
+                .orElse(price);
+    }
+
+    /** 최저가 플랫폼 이름 반환 */
+    public String getLowestPlatform() {
+        return platformLinks.stream()
+                .filter(l -> l.getPrice() != null)
+                .min(Comparator.comparingLong(PlatformLink::getPrice))
+                .map(PlatformLink::getPlatform)
+                .orElse(platform);
     }
 }
