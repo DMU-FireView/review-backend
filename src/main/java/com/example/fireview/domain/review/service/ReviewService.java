@@ -27,15 +27,23 @@ public class ReviewService {
     private final ReviewFeedbackRepository feedbackRepository;
     private final ProductRepository productRepository;
     private final UserService userService;
+    private final AtiService atiService;
 
     public List<ReviewResponse> getReviewsByProduct(Long productId, Double minScore) {
+        // 상품 내 모든 리뷰어의 ATI를 한 번에 조회 (N+1 방지)
+        java.util.Map<String, Double> atiMap = atiService.calculateAtiMapByProduct(productId);
+
         if (minScore != null && minScore > 0) {
             return reviewRepository
                     .findByProduct_IdAndRtiScoreGreaterThanEqual(productId, minScore)
-                    .stream().map(ReviewResponse::from).toList();
+                    .stream()
+                    .map(r -> ReviewResponse.of(r, atiMap.getOrDefault(r.getReviewerId(), 50.0)))
+                    .toList();
         }
         return reviewRepository.findByProduct_IdOrderByRtiScoreDesc(productId)
-                .stream().map(ReviewResponse::from).toList();
+                .stream()
+                .map(r -> ReviewResponse.of(r, atiMap.getOrDefault(r.getReviewerId(), 50.0)))
+                .toList();
     }
 
     @Transactional
