@@ -26,16 +26,16 @@ public class SecurityConfig {
     private final JwtDecoder jwtDecoder;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
-    private final List<String> allowedOrigins;
+    private final List<String> allowedOriginPatterns;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
-                          @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
+                          @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
-        this.allowedOrigins = allowedOrigins;
+        this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
     @Bean
@@ -80,10 +80,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(allowedOrigins);
+        // setAllowedOrigins() 가 아닌 setAllowedOriginPatterns() 를 사용해
+        // Flutter web dev server 처럼 동적 포트(http://localhost:*) 도 허용한다.
+        config.setAllowedOriginPatterns(allowedOriginPatterns);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
+        config.setExposedHeaders(List.of("Authorization"));
         config.setAllowCredentials(true);
+        config.setMaxAge(3600L);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
