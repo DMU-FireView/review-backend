@@ -36,4 +36,13 @@ public enum TrustGrade {
     public static TrustGrade fromRti(int rti) {
         return fromScore(rti);
     }
+
+    /** AI 서버 형식 level 문자열로 변환 (safe | warn | danger) */
+    public String toLevel() {
+        return switch (this) {
+            case SAFE -> "safe";
+            case DANGER -> "danger";
+            default -> "warn";
+        };
+    }
 }

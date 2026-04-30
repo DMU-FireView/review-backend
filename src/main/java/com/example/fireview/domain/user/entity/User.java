@@ -44,6 +44,14 @@ public class User {
 
     private boolean onboardingCompleted;
 
+    /**
+     * ATI (Account Trust Index): 앱 사용자의 계정 신뢰도 점수 (0~100)
+     * 당근마켓 온도처럼 리뷰어 프로필 옆에 표시됩니다.
+     * null = 아직 계산 전
+     */
+    @Column(name = "ati_score")
+    private Double atiScore;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
