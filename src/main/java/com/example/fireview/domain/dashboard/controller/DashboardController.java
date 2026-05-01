@@ -19,6 +19,11 @@ public class DashboardController {
 
     @GetMapping
     public ApiResponse<DashboardResponse> getDashboard(@AuthenticationPrincipal Jwt jwt) {
+        // jwt == null → 비회원: 개인화 없는 공개 대시보드 반환
+        // jwt != null → 로그인 사용자: 온보딩 카테고리 기반 개인화 대시보드 반환
+        if (jwt == null) {
+            return ApiResponse.success(dashboardService.getPublicDashboard());
+        }
         return ApiResponse.success(dashboardService.getDashboard(jwt.getSubject()));
     }
 
