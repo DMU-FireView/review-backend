@@ -51,7 +51,11 @@ public class DataInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        if (productRepository.count() > 0) return;
+        if (productRepository.count() > 0) {
+            // 이미 데이터가 있으면 placeholder 이미지만 업데이트
+            updatePlaceholderImages();
+            return;
+        }
         log.info("샘플 데이터 초기화 시작...");
 
         createUsers();
@@ -60,6 +64,39 @@ public class DataInitializer implements CommandLineRunner {
         createKeywords();
 
         log.info("샘플 데이터 초기화 완료. 상품={}, 리뷰={}", productRepository.count(), reviewRepository.count());
+    }
+
+    /**
+     * DB에 이미 데이터가 있을 때 placeholder 이미지를 네이버 실제 이미지로 교체.
+     * PostgreSQL 운영 환경에서 재시작 시 기존 데이터를 유지하면서 이미지만 업데이트.
+     */
+    private void updatePlaceholderImages() {
+        if (!naverShoppingClient.isConfigured()) {
+            log.debug("[DataInitializer] 네이버 API 미설정 - placeholder 이미지 업데이트 생략");
+            return;
+        }
+
+        List<Product> placeholderProducts = productRepository.findAll().stream()
+                .filter(p -> p.getImageUrl() != null && p.getImageUrl().contains("placeholder"))
+                .toList();
+
+        if (placeholderProducts.isEmpty()) {
+            log.debug("[DataInitializer] placeholder 이미지 없음 - 업데이트 불필요");
+            return;
+        }
+
+        log.info("[DataInitializer] placeholder 이미지 {}개 업데이트 시작", placeholderProducts.size());
+
+        for (Product product : placeholderProducts) {
+            String imageUrl = naverShoppingClient.fetchThumbnail(product.getName());
+            if (!imageUrl.isBlank()) {
+                product.setImageUrl(imageUrl);
+                productRepository.save(product);
+                log.debug("[DataInitializer] 이미지 업데이트: {} → {}", product.getName(), imageUrl);
+            }
+        }
+
+        log.info("[DataInitializer] placeholder 이미지 업데이트 완료");
     }
 
     private void createUsers() {
