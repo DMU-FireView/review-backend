@@ -27,13 +27,18 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
         // 어떤 제공자인지 확인 (google / naver)
         String registrationId = userRequest.getClientRegistration().getRegistrationId();
-        OAuthProvider provider = OAuthProvider.valueOf(registrationId.toUpperCase());
+        OAuthProvider provider;
+        try {
+            provider = OAuthProvider.valueOf(registrationId.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new OAuth2AuthenticationException("지원하지 않는 OAuth2 제공자입니다: " + registrationId);
+        }
 
         // 제공자별로 사용자 정보 추출
         OAuth2UserInfo userInfo = switch (provider) {
             case GOOGLE -> new GoogleOAuth2UserInfo(oAuth2User.getAttributes());
             case NAVER  -> new NaverOAuth2UserInfo(oAuth2User.getAttributes());
-            default -> throw new OAuth2AuthenticationException("지원하지 않는 OAuth2 제공자입니다: " + registrationId);
+            case LOCAL  -> throw new OAuth2AuthenticationException("LOCAL 계정은 OAuth2 로그인을 사용할 수 없습니다.");
         };
 
         log.debug("OAuth2 로그인 시도 - provider: {}, email: {}", provider, userInfo.getEmail());

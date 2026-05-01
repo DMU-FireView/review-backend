@@ -9,7 +9,11 @@ public class NaverOAuth2UserInfo implements OAuth2UserInfo {
 
     @SuppressWarnings("unchecked")
     public NaverOAuth2UserInfo(Map<String, Object> attributes) {
-        this.attributes = (Map<String, Object>) attributes.get("response");
+        Object response = attributes.get("response");
+        if (!(response instanceof Map)) {
+            throw new IllegalArgumentException("네이버 OAuth2 응답에 'response' 필드가 없거나 올바르지 않습니다: " + attributes);
+        }
+        this.attributes = (Map<String, Object>) response;
     }
 
     @Override
