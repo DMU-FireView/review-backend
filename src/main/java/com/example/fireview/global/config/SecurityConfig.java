@@ -49,16 +49,22 @@ public class SecurityConfig {
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
+                        // ── 인증 불필요 (게스트/비회원 허용) ──────────────────────────
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/landing/**").permitAll()
+                        // 상품 목록/상세/리뷰 조회 - 비회원도 열람 가능
                         .requestMatchers("/api/products/**").permitAll()
-                        .requestMatchers("/api/reviews/*/feedback").authenticated()
+                        // 홈 대시보드 - 비회원은 개인화 없는 공개 버전 반환
+                        .requestMatchers("/api/dashboard/**").permitAll()
                         .requestMatchers("/api/keywords/**").permitAll()
                         .requestMatchers("/api/analysis/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         // OAuth2 로그인 진입 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        // ── 인증 필요 ─────────────────────────────────────────────────
+                        // 리뷰 피드백(도움돼요 등)은 로그인 사용자만 가능
+                        .requestMatchers("/api/reviews/*/feedback").authenticated()
                         .anyRequest().authenticated())
                 // JWT 기반 API 인증
                 .oauth2ResourceServer(oauth2 ->
