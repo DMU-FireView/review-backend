@@ -34,11 +34,15 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String token = jwtTokenProvider.generateToken(user);
 
-        // 프론트엔드로 JWT 토큰을 쿼리 파라미터에 담아 리다이렉트
-        // 예: http://localhost:3000/oauth2/callback?token=eyJhbGci...&onboarding=false
+        // JWT 토큰을 URL Fragment(#)에 담아 리다이렉트
+        // 쿼리 파라미터(?token=) 대신 Fragment를 사용하는 이유:
+        //   - Fragment는 브라우저 히스토리에 남지 않음
+        //   - 서버 액세스 로그에 기록되지 않음
+        //   - Referer 헤더에 포함되지 않아 외부 유출 방지
+        // 예: http://localhost:3000/oauth2/callback#token=eyJhbGci...&onboarding=false
+        String fragment = "token=" + token + "&onboarding=" + !user.isOnboardingCompleted();
         String redirectUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
-                .queryParam("token", token)
-                .queryParam("onboarding", !user.isOnboardingCompleted())
+                .fragment(fragment)
                 .build().toUriString();
 
         log.debug("OAuth2 로그인 성공 - email: {}, 온보딩 완료: {}", user.getEmail(), user.isOnboardingCompleted());
