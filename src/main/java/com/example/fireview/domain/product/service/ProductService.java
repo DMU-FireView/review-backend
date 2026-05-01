@@ -35,6 +35,7 @@ public class ProductService {
                 .toList();
     }
 
+    /** 로컬 DB 상품명 검색 */
     public List<ProductResponse> searchProducts(String keyword) {
         return productRepository.findByNameContainingIgnoreCase(keyword).stream()
                 .map(ProductResponse::from)
