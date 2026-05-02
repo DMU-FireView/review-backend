@@ -5,6 +5,7 @@ import com.example.fireview.domain.product.dto.ProductResponse;
 import com.example.fireview.domain.product.service.ProductService;
 import com.example.fireview.domain.review.dto.ReviewResponse;
 import com.example.fireview.domain.review.service.ReviewService;
+import com.example.fireview.domain.search.service.NaverSearchService;
 import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,12 +22,14 @@ public class ProductController {
     private final ProductService productService;
     private final ReviewService reviewService;
     private final DashboardService dashboardService;
+    private final NaverSearchService naverSearchService;
 
     @GetMapping
     public ApiResponse<List<ProductResponse>> getProducts(
             @RequestParam(required = false) String keyword) {
         if (keyword != null && !keyword.isBlank()) {
-            return ApiResponse.success(productService.searchProducts(keyword));
+            // 네이버 API + DB 병합 결과 반환 (DB만 조회 시 결과 부족 문제 해결)
+            return ApiResponse.success(naverSearchService.search(keyword, 100).products());
         }
         return ApiResponse.success(productService.getAllProducts());
     }
