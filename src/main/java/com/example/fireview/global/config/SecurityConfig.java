@@ -65,8 +65,9 @@ public class SecurityConfig {
                         // OAuth2 로그인 진입 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         // ── 인증 필요 ─────────────────────────────────────────────────
-                        // 리뷰 피드백(도움돼요 등)은 로그인 사용자만 가능
                         .requestMatchers("/api/reviews/*/feedback").authenticated()
+                        .requestMatchers("/api/wishlist/**").authenticated()
+                        .requestMatchers("/api/cart/**").authenticated()
                         .anyRequest().authenticated())
                 // JWT 기반 API 인증
                 .oauth2ResourceServer(oauth2 ->
