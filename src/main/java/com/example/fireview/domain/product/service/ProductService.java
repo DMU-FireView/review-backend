@@ -35,9 +35,9 @@ public class ProductService {
                 .toList();
     }
 
-    /** 로컬 DB 상품명 검색 */
+    /** 로컬 DB 상품명 검색 (platformLinks JOIN FETCH로 LazyInit 방지) */
     public List<ProductResponse> searchProducts(String keyword) {
-        return productRepository.findByNameContainingIgnoreCase(keyword).stream()
+        return productRepository.findByNameContainingIgnoreCaseWithLinks(keyword).stream()
                 .map(ProductResponse::from)
                 .toList();
     }
