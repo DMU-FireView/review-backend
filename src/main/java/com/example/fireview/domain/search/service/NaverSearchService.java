@@ -1,6 +1,7 @@
 package com.example.fireview.domain.search.service;
 
 import com.example.fireview.domain.dashboard.service.DashboardService;
+import com.example.fireview.domain.product.cache.NaverProductCache;
 import com.example.fireview.domain.product.client.NaverShoppingClient;
 import com.example.fireview.domain.product.dto.ProductResponse;
 import com.example.fireview.domain.product.repository.ProductRepository;
@@ -25,6 +26,7 @@ public class NaverSearchService {
     private final NaverShoppingClient naverShoppingClient;
     private final DashboardService dashboardService;
     private final ProductRepository productRepository;
+    private final NaverProductCache naverProductCache;
 
     /**
      * 네이버 쇼핑 API로 상품 검색.
@@ -77,6 +79,9 @@ public class NaverSearchService {
         naverProducts.stream()
                 .filter(p -> !dbNames.contains(p.name().toLowerCase()))
                 .forEach(merged::add);
+
+        // 5. 네이버 결과를 캐시에 저장 (상품 상세 조회 시 DB 없는 경우 fallback)
+        naverProductCache.putAll(naverProducts);
 
         log.info("[NaverSearch] 검색 완료: keyword={}, DB={}건, 네이버={}건, 합계={}건",
                 keyword, dbProducts.size(), naverProducts.size(), merged.size());
