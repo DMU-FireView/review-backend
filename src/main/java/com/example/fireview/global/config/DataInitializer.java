@@ -51,6 +51,7 @@ public class DataInitializer implements CommandLineRunner {
     private static final Random RANDOM = new Random(42); // 재현 가능한 랜덤
 
     @Override
+    @Transactional
     public void run(String... args) {
         if (productRepository.count() > 0) {
             updatePlaceholderImages();
