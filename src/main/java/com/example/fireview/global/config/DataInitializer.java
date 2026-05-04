@@ -200,16 +200,11 @@ public class DataInitializer implements CommandLineRunner {
 
     /**
      * 기존 RDS 데이터의 가짜 platform URL을 실제 검색 URL로 교체.
-     * fake URL 패턴: smartstore.naver.com/samsung, coupang.com/vp/products 등
-       fix/lazy-init-exception
+     * fake URL 패턴: smartstore.naver.com/samsung, coupang.com/vp/products 등 fix/lazy-init-exception
      * @Transactional 필수 - platformLinks가 LAZY 로딩이라 세션 필요
      */
     @Transactional
     public void updateFakePlatformLinks() {
-
-     */
-    private void updateFakePlatformLinks() {
-         main
         List<Product> products = productRepository.findAll();
         boolean updated = false;
 
