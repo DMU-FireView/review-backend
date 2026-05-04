@@ -101,6 +101,15 @@ public class NaverShoppingClient {
         return items.get(0).image() != null ? items.get(0).image() : "";
     }
 
+    /**
+     * 상품명으로 첫 번째 결과의 NaverShoppingItem 반환 (이미지 + 링크 포함).
+     * DataInitializer에서 썸네일과 실제 Naver 링크를 동시에 가져올 때 사용.
+     */
+    public NaverShoppingItem fetchItem(String productName) {
+        List<NaverShoppingItem> items = searchProducts(productName, 1);
+        return items.isEmpty() ? null : items.get(0);
+    }
+
     // ──────────────────────────────────────────────────────────────────────
 
     private HttpEntity<Void> buildEntity() {
