@@ -10,6 +10,7 @@ import com.example.fireview.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,6 +33,7 @@ public class NaverSearchService {
      * @param display 결과 수 (기본 30, 최대 100)
      * @return 네이버 쇼핑 검색 결과
      */
+    @Transactional(readOnly = true)
     public NaverSearchResponse search(String keyword, int display) {
         if (keyword == null || keyword.isBlank()) {
             throw new CustomException(ErrorCode.INVALID_INPUT);
