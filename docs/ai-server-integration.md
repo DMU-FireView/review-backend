@@ -33,7 +33,7 @@ FastAPI AI 서버 (http://20.249.211.171:8000)
 
 ### application-prod.properties
 ```properties
-ai.server.base-url=${AI_SERVER_URL:http://localhost:8000}
+ai.server.base-url=${AI_SERVER_URL}
 ```
 
 ### .env.prod (EC2)
