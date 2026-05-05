@@ -46,6 +46,10 @@ public class Product {
     @Column(name = "naver_product_id")
     private String naverProductId;
 
+    /** 소분류 (Naver category3 값, 예: "스마트폰", "이어폰") */
+    @Column(name = "sub_category", length = 100)
+    private String subCategory;
+
     private LocalDateTime createdAt;
 
     /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */

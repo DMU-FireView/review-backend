@@ -91,74 +91,88 @@ public class DataInitializer implements CommandLineRunner {
     private List<Product> createProducts() {
         List<Product> products = new ArrayList<>();
 
-        // 전자기기 (7개)
-        products.add(product("삼성 갤럭시 S25 Ultra", 1499000L, Category.ELECTRONICS, 82.5, 4.5,
+        // 디지털/가전 - 모바일/태블릿 (3개)
+        products.add(product("삼성 갤럭시 S25 Ultra", 1499000L, Category.DIGITAL_MOBILE, 82.5, 4.5,
                 List.of(link("NAVER", 1499000L, "https://smartstore.naver.com/samsung/galaxy-s25-ultra"),
                         link("COUPANG", 1469000L, "https://www.coupang.com/vp/products/galaxy-s25-ultra"),
                         link("11ST", 1479000L, "https://www.11st.co.kr/products/galaxy-s25-ultra"))));
-        products.add(product("LG 그램 17인치 노트북", 1890000L, Category.ELECTRONICS, 88.0, 4.7,
+        products.add(product("애플 아이패드 프로 11인치", 1299000L, Category.DIGITAL_MOBILE, 85.0, 4.5,
+                List.of(link("NAVER", 1299000L, "https://smartstore.naver.com/apple/ipad-pro-11"),
+                        link("COUPANG", 1269000L, "https://www.coupang.com/vp/products/ipad-pro-11"))));
+        products.add(product("삼성 갤럭시 워치7", 299000L, Category.DIGITAL_MOBILE, 43.0, 3.6));
+
+        // 디지털/가전 - PC/주변기기 (2개)
+        products.add(product("LG 그램 17인치 노트북", 1890000L, Category.DIGITAL_PC, 88.0, 4.7,
                 List.of(link("NAVER", 1890000L, "https://smartstore.naver.com/lg/gram-17"),
                         link("COUPANG", 1850000L, "https://www.coupang.com/vp/products/lg-gram-17"),
                         link("GMARKET", 1870000L, "https://www.gmarket.co.kr/lg-gram-17"))));
-        products.add(product("애플 에어팟 프로 2세대", 359000L, Category.ELECTRONICS, 91.0, 4.8,
+        products.add(product("레노버 씽크패드 X1 카본", 2190000L, Category.DIGITAL_PC, 78.0, 4.3));
+
+        // 디지털/가전 - 영상/음향 (2개)
+        products.add(product("애플 에어팟 프로 2세대", 359000L, Category.DIGITAL_AV, 91.0, 4.8,
                 List.of(link("NAVER", 359000L, "https://smartstore.naver.com/apple/airpods-pro-2"),
                         link("COUPANG", 339000L, "https://www.coupang.com/vp/products/airpods-pro-2"),
                         link("SSG", 349000L, "https://www.ssg.com/airpods-pro-2"))));
-        products.add(product("소니 WH-1000XM5 헤드폰", 429000L, Category.ELECTRONICS, 87.5, 4.6,
+        products.add(product("소니 WH-1000XM5 헤드폰", 429000L, Category.DIGITAL_AV, 87.5, 4.6,
                 List.of(link("NAVER", 429000L, "https://smartstore.naver.com/sony/wh-1000xm5"),
                         link("COUPANG", 399000L, "https://www.coupang.com/vp/products/sony-wh1000xm5"))));
-        products.add(product("애플 아이패드 프로 11인치", 1299000L, Category.ELECTRONICS, 85.0, 4.5,
-                List.of(link("NAVER", 1299000L, "https://smartstore.naver.com/apple/ipad-pro-11"),
-                        link("COUPANG", 1269000L, "https://www.coupang.com/vp/products/ipad-pro-11"))));
-        products.add(product("삼성 갤럭시 워치7", 299000L, Category.ELECTRONICS, 43.0, 3.6));
-        products.add(product("레노버 씽크패드 X1 카본", 2190000L, Category.ELECTRONICS, 78.0, 4.3));
 
-        // 패션 (5개)
-        products.add(product("나이키 에어맥스 270", 179000L, Category.FASHION, 78.5, 4.3,
+        // 디지털/가전 - 생활가전 (2개)
+        products.add(product("LG 코드제로 A9S 무선청소기", 899000L, Category.DIGITAL_HOME_APPLIANCE, 84.0, 4.5));
+        products.add(product("삼성 비스포크 큐브 공기청정기", 549000L, Category.DIGITAL_HOME_APPLIANCE, 72.0, 4.1));
+
+        // 디지털/가전 - 주방가전 (2개)
+        products.add(product("필립스 에어프라이어 5.6L", 159000L, Category.DIGITAL_KITCHEN, 88.5, 4.7));
+        products.add(product("다이슨 에어랩 멀티 스타일러", 689000L, Category.DIGITAL_KITCHEN, 67.0, 4.2));
+
+        // 패션잡화 - 신발 (3개)
+        products.add(product("나이키 에어맥스 270", 179000L, Category.ACC_SHOES, 78.5, 4.3,
                 List.of(link("NAVER", 179000L, "https://smartstore.naver.com/nike/airmax-270"),
                         link("COUPANG", 159000L, "https://www.coupang.com/vp/products/nike-airmax-270"),
                         link("11ST", 169000L, "https://www.11st.co.kr/products/nike-airmax-270"))));
-        products.add(product("뉴발란스 574 클래식", 129000L, Category.FASHION, 85.0, 4.6,
+        products.add(product("뉴발란스 574 클래식", 129000L, Category.ACC_SHOES, 85.0, 4.6,
                 List.of(link("NAVER", 129000L, "https://smartstore.naver.com/newbalance/574"),
                         link("COUPANG", 119000L, "https://www.coupang.com/vp/products/newbalance-574"))));
-        products.add(product("아디다스 울트라부스트 22", 219000L, Category.FASHION, 55.0, 4.0));
-        products.add(product("자라 오버핏 트렌치코트", 159000L, Category.FASHION, 38.0, 3.4));
-        products.add(product("유니클로 울트라라이트 다운", 89000L, Category.FASHION, 81.0, 4.4));
+        products.add(product("아디다스 울트라부스트 22", 219000L, Category.ACC_SHOES, 55.0, 4.0));
 
-        // 화장품 (5개)
-        products.add(product("설화수 자음생 크림 60ml", 185000L, Category.COSMETICS, 43.0, 3.8));
-        products.add(product("아이오페 레티놀 엑스퍼트 0.1%", 62000L, Category.COSMETICS, 55.0, 4.1));
-        products.add(product("라네즈 워터슬리핑마스크 70ml", 38000L, Category.COSMETICS, 83.0, 4.5));
-        products.add(product("에스티로더 갈색병 50ml", 145000L, Category.COSMETICS, 29.0, 3.1));
-        products.add(product("닥터지 브라이트닝 필링젤", 25000L, Category.COSMETICS, 77.0, 4.2));
+        // 패션의류 - 여성의류 (2개)
+        products.add(product("자라 오버핏 트렌치코트", 159000L, Category.FASHION_WOMEN, 38.0, 3.4));
+        products.add(product("유니클로 울트라라이트 다운", 89000L, Category.FASHION_WOMEN, 81.0, 4.4));
 
-        // 생활가전 (4개)
-        products.add(product("다이슨 에어랩 멀티 스타일러", 689000L, Category.HOME_APPLIANCE, 67.0, 4.2));
-        products.add(product("LG 코드제로 A9S 무선청소기", 899000L, Category.HOME_APPLIANCE, 84.0, 4.5));
-        products.add(product("삼성 비스포크 큐브 공기청정기", 549000L, Category.HOME_APPLIANCE, 72.0, 4.1));
-        products.add(product("필립스 에어프라이어 5.6L", 159000L, Category.HOME_APPLIANCE, 88.5, 4.7));
+        // 뷰티 - 스킨케어 (3개)
+        products.add(product("설화수 자음생 크림 60ml", 185000L, Category.BEAUTY_SKINCARE, 43.0, 3.8));
+        products.add(product("라네즈 워터슬리핑마스크 70ml", 38000L, Category.BEAUTY_SKINCARE, 83.0, 4.5));
+        products.add(product("아이오페 레티놀 엑스퍼트 0.1%", 62000L, Category.BEAUTY_SKINCARE, 55.0, 4.1));
 
-        // 식품 (3개)
-        products.add(product("동원 참치 85g 20개입", 28000L, Category.FOOD, 90.0, 4.8));
-        products.add(product("정관장 홍삼정 에브리타임", 98000L, Category.FOOD, 52.0, 4.0));
-        products.add(product("농심 신라면 40봉", 18500L, Category.FOOD, 86.0, 4.6));
+        // 뷰티 - 메이크업 (2개)
+        products.add(product("에스티로더 갈색병 50ml", 145000L, Category.BEAUTY_MAKEUP, 29.0, 3.1));
+        products.add(product("닥터지 브라이트닝 필링젤", 25000L, Category.BEAUTY_CLEANSING, 77.0, 4.2));
 
-        // 스포츠 (3개)
-        products.add(product("나이키 에어줌 페가수스 40", 149000L, Category.SPORTS, 80.0, 4.4));
-        products.add(product("언더아머 UA 차지 어설트 4", 119000L, Category.SPORTS, 62.0, 4.0));
-        products.add(product("요넥스 나노플렉스 800 배드민턴 라켓", 189000L, Category.SPORTS, 84.0, 4.5));
+        // 식품 - 가공식품 (2개)
+        products.add(product("동원 참치 85g 20개입", 28000L, Category.FOOD_PROCESSED, 90.0, 4.8));
+        products.add(product("농심 신라면 40봉", 18500L, Category.FOOD_PROCESSED, 86.0, 4.6));
 
-        // 도서 (2개)
-        products.add(product("클린 코드 (로버트 C. 마틴)", 33000L, Category.BOOKS, 94.0, 4.9));
-        products.add(product("자바 ORM 표준 JPA 프로그래밍", 45000L, Category.BOOKS, 92.0, 4.8));
+        // 식품 - 건강식품 (1개)
+        products.add(product("정관장 홍삼정 에브리타임", 98000L, Category.FOOD_HEALTH, 52.0, 4.0));
 
-        // 유아 (2개)
-        products.add(product("하기스 신생아 기저귀 84매", 32000L, Category.BABY, 88.0, 4.7));
-        products.add(product("피셔프라이스 신생아 바운서", 89000L, Category.BABY, 75.0, 4.2));
+        // 스포츠/레저 - 헬스/요가 (2개)
+        products.add(product("나이키 에어줌 페가수스 40", 149000L, Category.SPORTS_FITNESS, 80.0, 4.4));
+        products.add(product("언더아머 UA 차지 어설트 4", 119000L, Category.SPORTS_FITNESS, 62.0, 4.0));
+
+        // 스포츠/레저 - 등산/캠핑 (1개)
+        products.add(product("요넥스 나노플렉스 800 배드민턴 라켓", 189000L, Category.SPORTS_OUTDOOR, 84.0, 4.5));
+
+        // 도서/문구/취미 - 도서 (2개)
+        products.add(product("클린 코드 (로버트 C. 마틴)", 33000L, Category.BOOKS_BOOK, 94.0, 4.9));
+        products.add(product("자바 ORM 표준 JPA 프로그래밍", 45000L, Category.BOOKS_BOOK, 92.0, 4.8));
+
+        // 출산/유아동 - 출산/육아 (2개)
+        products.add(product("하기스 신생아 기저귀 84매", 32000L, Category.BABY_NEWBORN, 88.0, 4.7));
+        products.add(product("피셔프라이스 신생아 바운서", 89000L, Category.BABY_GOODS, 75.0, 4.2));
 
         // 반려동물 (2개)
-        products.add(product("로얄캐닌 어덜트 고양이 사료 4kg", 58000L, Category.PET, 86.0, 4.6));
-        products.add(product("강아지 자동 급수기 2.5L", 35000L, Category.PET, 47.0, 3.7));
+        products.add(product("로얄캐닌 어덜트 고양이 사료 4kg", 58000L, Category.PET_CAT, 86.0, 4.6));
+        products.add(product("강아지 자동 급수기 2.5L", 35000L, Category.PET_DOG, 47.0, 3.7));
 
         return productRepository.saveAll(products);
     }
