@@ -269,6 +269,7 @@ public class DataInitializer implements CommandLineRunner {
         String imageUrl = "";
         String naverLink = searchUrl("NAVER", name);
 
+        String naverProductId = null;
         if (naverShoppingClient.isConfigured()) {
             var item = naverShoppingClient.fetchItem(name);
             naverApiDelay();
@@ -276,6 +277,7 @@ public class DataInitializer implements CommandLineRunner {
                 imageUrl = item.image() != null ? item.image() : "";
                 naverLink = item.link() != null && !item.link().isBlank()
                         ? item.link() : naverLink;
+                naverProductId = item.productId();
             }
         }
 
@@ -295,6 +297,7 @@ public class DataInitializer implements CommandLineRunner {
                 .avgRti(avgRti)
                 .reviewCount(0)
                 .avgRating(avgRating)
+                .naverProductId(naverProductId)
                 .platformLinks(links)
                 .build();
     }

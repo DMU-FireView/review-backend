@@ -42,6 +42,10 @@ public class Product {
 
     private Double avgRating;
 
+    /** 네이버 쇼핑 API의 productId (AI 서버 연동 시 식별자로 사용) */
+    @Column(name = "naver_product_id")
+    private String naverProductId;
+
     private LocalDateTime createdAt;
 
     /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */
