@@ -3,6 +3,7 @@ package com.example.fireview.domain.search.service;
 import com.example.fireview.domain.dashboard.service.DashboardService;
 import com.example.fireview.domain.product.client.NaverShoppingClient;
 import com.example.fireview.domain.product.dto.ProductResponse;
+import com.example.fireview.domain.product.repository.ProductRepository;
 import com.example.fireview.domain.search.dto.NaverSearchResponse;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
@@ -10,7 +11,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -19,6 +23,7 @@ public class NaverSearchService {
 
     private final NaverShoppingClient naverShoppingClient;
     private final DashboardService dashboardService;
+    private final ProductRepository productRepository;
 
     /**
      * 네이버 쇼핑 API로 상품 검색.
@@ -46,14 +51,34 @@ public class NaverSearchService {
             log.warn("[NaverSearch] 키워드 기록 실패 (무시): {}", e.getMessage());
         }
 
-        List<ProductResponse> products = naverShoppingClient
+        // 1. DB에서 RTI 데이터가 있는 상품 우선 검색
+        List<ProductResponse> dbProducts = productRepository
+                .findByNameContainingIgnoreCase(keyword)
+                .stream()
+                .map(ProductResponse::from)
+                .toList();
+
+        // 2. 네이버 API 검색
+        List<ProductResponse> naverProducts = naverShoppingClient
                 .searchProducts(keyword, display)
                 .stream()
                 .map(ProductResponse::fromNaverItem)
                 .toList();
 
-        log.info("[NaverSearch] 검색 완료: keyword={}, 결과={}건", keyword, products.size());
+        // 3. DB 상품명 set (중복 제거용)
+        Set<String> dbNames = dbProducts.stream()
+                .map(p -> p.name().toLowerCase())
+                .collect(Collectors.toSet());
 
-        return NaverSearchResponse.of(keyword, products);
+        // 4. 네이버 결과 중 DB에 없는 상품만 추가 (DB 상품 우선 노출)
+        List<ProductResponse> merged = new ArrayList<>(dbProducts);
+        naverProducts.stream()
+                .filter(p -> !dbNames.contains(p.name().toLowerCase()))
+                .forEach(merged::add);
+
+        log.info("[NaverSearch] 검색 완료: keyword={}, DB={}건, 네이버={}건, 합계={}건",
+                keyword, dbProducts.size(), naverProducts.size(), merged.size());
+
+        return NaverSearchResponse.of(keyword, merged);
     }
 }

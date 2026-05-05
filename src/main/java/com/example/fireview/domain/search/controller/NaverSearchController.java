@@ -27,7 +27,7 @@ public class NaverSearchController {
     @GetMapping
     public ApiResponse<NaverSearchResponse> search(
             @RequestParam String keyword,
-            @RequestParam(required = false, defaultValue = "30") int display) {
+            @RequestParam(required = false, defaultValue = "100") int display) {
         return ApiResponse.success(naverSearchService.search(keyword, display));
     }
 }
