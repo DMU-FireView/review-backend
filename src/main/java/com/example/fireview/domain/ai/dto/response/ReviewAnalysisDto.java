@@ -40,7 +40,7 @@ public record ReviewAnalysisDto(
                 };
 
         return new ReviewAnalysisDto(
-                sample.review_id(),
+                sample.reviewId(),
                 sample.content(),
                 sample.author(),
                 sample.date(),

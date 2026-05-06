@@ -1,5 +1,7 @@
 package com.example.fireview.domain.ai.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.List;
 
 /**
@@ -11,7 +13,7 @@ import java.util.List;
  * - reasons: 프론트엔드 태그 노출용 사유 배열 (기존 tags 대체)
  */
 public record SampleReview(
-        String review_id,
+        @JsonProperty("review_id") String reviewId,
         String author,
         String date,
         Integer rating,
