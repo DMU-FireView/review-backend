@@ -22,6 +22,7 @@ import java.util.List;
  */
 public record ProductResponse(
         Long id,
+        String naverProductId,             // 네이버 상품 ID (AI 분석 요청 시 사용)
         String name,
         String imageUrl,
         Long price,
@@ -61,6 +62,7 @@ public record ProductResponse(
 
         return new ProductResponse(
                 productId,
+                item.productId(),               // 네이버 상품 ID (String 원본 보존)
                 name,
                 item.image(),
                 price,
@@ -91,6 +93,7 @@ public record ProductResponse(
         Category category = product.getCategory();
         return new ProductResponse(
                 product.getId(),
+                product.getNaverProductId(),    // DB 상품의 네이버 상품 ID
                 product.getName(),
                 product.getImageUrl(),
                 product.getPrice(),
