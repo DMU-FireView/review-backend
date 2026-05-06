@@ -24,9 +24,9 @@ public class AuthController {
 
     @PostMapping("/signup")
     @ResponseStatus(HttpStatus.CREATED)
-    public ApiResponse<Void> signup(@Valid @RequestBody SignupRequest request) {
-        authService.signup(request);
-        return ApiResponse.success("회원가입이 완료되었습니다.", null);
+    public ApiResponse<LoginResponse> signup(@Valid @RequestBody SignupRequest request) {
+        LoginResponse response = authService.signup(request);
+        return ApiResponse.success("회원가입이 완료되었습니다.", response);
     }
 
     @PostMapping("/login")
