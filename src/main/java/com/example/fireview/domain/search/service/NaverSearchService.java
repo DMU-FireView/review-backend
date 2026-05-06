@@ -55,9 +55,9 @@ public class NaverSearchService {
             log.warn("[NaverSearch] 키워드 기록 실패 (무시): {}", e.getMessage());
         }
 
-        // 1. DB에서 RTI 데이터가 있는 상품 우선 검색
+        // 1. DB에서 RTI 데이터가 있는 상품 우선 검색 (platformLinks JOIN FETCH로 LazyInit 방지)
         List<ProductResponse> dbProducts = productRepository
-                .findByNameContainingIgnoreCase(keyword)
+                .findByNameContainingIgnoreCaseWithLinks(keyword)
                 .stream()
                 .map(ProductResponse::from)
                 .toList();
