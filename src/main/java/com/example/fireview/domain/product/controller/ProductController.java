@@ -50,9 +50,15 @@ public class ProductController {
             return ApiResponse.success(productService.getProduct(id));
         } catch (CustomException e) {
             if (e.getErrorCode() == ErrorCode.PRODUCT_NOT_FOUND) {
-                // DB에 없으면 네이버 검색 캐시에서 fallback (네이버 API 상품 ID)
+                // DB에 없으면 네이버 캐시에서 조회 후 DB에 자동 저장
                 return naverProductCache.get(id)
-                        .map(ApiResponse::success)
+                        .map(cached -> {
+                            ProductResponse saved = productService.saveFromCache(cached);
+                            if (jwt != null) {
+                                dashboardService.recordView(jwt.getSubject(), saved.id());
+                            }
+                            return ApiResponse.success(saved);
+                        })
                         .orElseThrow(() -> e);
             }
             throw e;
