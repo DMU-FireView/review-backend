@@ -27,7 +27,7 @@ public class AuthService {
     private final PasswordResetTokenStore resetTokenStore;
 
     @Transactional
-    public void signup(SignupRequest request) {
+    public LoginResponse signup(SignupRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -40,6 +40,9 @@ public class AuthService {
                 .onboardingCompleted(false)
                 .build();
         userRepository.save(user);
+
+        String token = jwtTokenProvider.generateToken(user);
+        return new LoginResponse(token, user.getEmail(), user.getNickname(), user.getRole(), false);
     }
 
     public LoginResponse login(LoginRequest request) {
