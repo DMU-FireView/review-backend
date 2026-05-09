@@ -8,6 +8,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -51,12 +53,18 @@ public class AiHealthController {
 
         long startTime = System.currentTimeMillis();
         try {
-            String healthUrl = aiServerBaseUrl + "/health";
-            restTemplate.getForObject(healthUrl, String.class);
+            // AI 서버 루트에 GET 요청 - 응답 여부(404 포함)로 서버 도달 가능 여부 확인
+            restTemplate.getForObject(aiServerBaseUrl, String.class);
             responseTimeMs = System.currentTimeMillis() - startTime;
             status = "ok";
             message = "AI 서버 연결 성공";
             log.info("[AI Health] 연결 성공: {}ms", responseTimeMs);
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            // HTTP 응답이 왔으면 서버는 살아있음 (404, 405 등)
+            responseTimeMs = System.currentTimeMillis() - startTime;
+            status = "ok";
+            message = "AI 서버 연결 성공 (HTTP " + e.getStatusCode().value() + ")";
+            log.info("[AI Health] 서버 응답 확인 ({}): {}ms", e.getStatusCode().value(), responseTimeMs);
         } catch (Exception e) {
             responseTimeMs = System.currentTimeMillis() - startTime;
             status = "error";
