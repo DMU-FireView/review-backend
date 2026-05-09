@@ -79,7 +79,37 @@ public class SecurityConfig {
                         .failureHandler((request, response, exception) -> {
                             org.slf4j.LoggerFactory.getLogger(SecurityConfig.class)
                                     .error("[OAuth2] 로그인 실패 - {}: {}", exception.getClass().getSimpleName(), exception.getMessage());
-                            response.sendRedirect("https://www.beens.kr/login?error");
+
+                            // [DEBUG] 리다이렉트 대신 HTML 에러 페이지 직접 응답
+                            // 원인 파악 후 아래 블록을 제거하고 sendRedirect로 복구
+                            String cookieHeader = request.getHeader("Cookie");
+                            String sessionId = request.getRequestedSessionId();
+                            boolean sessionValid = request.isRequestedSessionIdValid();
+                            response.setContentType("text/html; charset=UTF-8");
+                            response.setStatus(200);
+                            response.getWriter().write("""
+                                <!DOCTYPE html>
+                                <html>
+                                <head><meta charset="UTF-8"><title>OAuth2 디버그</title></head>
+                                <body style="font-family:monospace; padding:20px; background:#1a1a1a; color:#00ff00;">
+                                <h2 style="color:#ff4444;">❌ OAuth2 로그인 실패</h2>
+                                <table border="1" style="border-collapse:collapse; color:#fff;">
+                                  <tr><td style="padding:8px; background:#333;">에러 타입</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px; background:#333;">에러 메시지</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px; background:#333;">Cookie 헤더</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px; background:#333;">세션 ID</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px; background:#333;">세션 유효</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px; background:#333;">요청 URL</td><td style="padding:8px;">%s</td></tr>
+                                </table>
+                                </body></html>
+                                """.formatted(
+                                    exception.getClass().getSimpleName(),
+                                    exception.getMessage(),
+                                    cookieHeader != null ? cookieHeader : "(없음)",
+                                    sessionId != null ? sessionId : "(없음)",
+                                    sessionValid,
+                                    request.getRequestURL() + (request.getQueryString() != null ? "?" + request.getQueryString() : "")
+                            ));
                         }));
 
         return http.build();
