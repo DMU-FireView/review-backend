@@ -30,7 +30,10 @@ public record ProductAnalysisResponse(
         // 비율 통계 (AI 서버 미제공 → 백엔드 계산)
         Double realReviewRatio,      // 실사용 리뷰 비율 (safe / total)
         Double adSuspicionRatio,     // 광고성 의심 비율 (AD 관련 코드 보유 리뷰 / total)
-        Double repetitiveRatio       // 반복 표현 비율 (REPETITIVE_KEYWORD 보유 리뷰 / total)
+        Double repetitiveRatio,      // 반복 표현 비율 (REPETITIVE_KEYWORD 보유 리뷰 / total)
+
+        // 주요 판단 신호 (AI 서버 미제공 → 백엔드 계산)
+        List<TrustSignalDto> trustSignals
 
 ) {
     public static ProductAnalysisResponse of(
@@ -82,16 +85,37 @@ public record ProductAnalysisResponse(
 
         double adSuspicionRatio = 0.0;
         double repetitiveRatio = 0.0;
+        List<TrustSignalDto> trustSignals = List.of();
+
         if (detailResponse != null && detailResponse.results() != null && !detailResponse.results().isEmpty()) {
             int total = detailResponse.results().size();
+
             long adCount = detailResponse.results().stream()
                     .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> adCodes.contains(reason.code())))
                     .count();
             long repCount = detailResponse.results().stream()
                     .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> "REPETITIVE_KEYWORD".equals(reason.code())))
                     .count();
+            long verifiedCount = detailResponse.results().stream()
+                    .filter(r -> r.inputFeatures() != null && "True".equals(String.valueOf(r.inputFeatures().get("verified_purchase"))))
+                    .count();
+            long timingCount = detailResponse.results().stream()
+                    .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> "MULTIPLE_REVIEWS_SAME_DAY".equals(reason.code())))
+                    .count();
+
             adSuspicionRatio = Math.round(adCount * 1000.0 / total) / 10.0;
-            repetitiveRatio = Math.round(repCount * 1000.0 / total) / 10.0;
+            repetitiveRatio  = Math.round(repCount * 1000.0 / total) / 10.0;
+
+            double verifiedRatio = (double) verifiedCount / total;
+            double repRatio      = (double) repCount / total;
+            double timingRatio   = (double) timingCount / total;
+
+            trustSignals = List.of(
+                    TrustSignalDto.ofVerifiedPurchase(verifiedRatio),
+                    TrustSignalDto.ofTextDiversity(1.0 - repRatio),
+                    TrustSignalDto.ofRepetitivePattern(repRatio),
+                    TrustSignalDto.ofTimingPattern(timingRatio)
+            );
         }
 
         return new ProductAnalysisResponse(
@@ -106,7 +130,8 @@ public record ProductAnalysisResponse(
                 trendDtos,
                 realReviewRatio,
                 adSuspicionRatio,
-                repetitiveRatio
+                repetitiveRatio,
+                trustSignals
         );
     }
 }
