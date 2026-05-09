@@ -25,7 +25,12 @@ public record ProductAnalysisResponse(
         List<ReviewAnalysisDto> reviews,
 
         // rti-trend 날짜별 추이
-        List<TrendEntryDto> trend
+        List<TrendEntryDto> trend,
+
+        // 비율 통계 (AI 서버 미제공 → 백엔드 계산)
+        Double realReviewRatio,      // 실사용 리뷰 비율 (safe / total)
+        Double adSuspicionRatio,     // 광고성 의심 비율 (AD 관련 코드 보유 리뷰 / total)
+        Double repetitiveRatio       // 반복 표현 비율 (REPETITIVE_KEYWORD 보유 리뷰 / total)
 
 ) {
     public static ProductAnalysisResponse of(
@@ -66,6 +71,29 @@ public record ProductAnalysisResponse(
                 ? trendResponse.trend().stream().map(TrendEntryDto::from).toList()
                 : List.of();
 
+        // 비율 계산 (product-detail 전체 리뷰 기준)
+        java.util.Set<String> adCodes = java.util.Set.of(
+                "PURCHASE_NOT_VERIFIED", "MULTIPLE_REVIEWS_SAME_DAY",
+                "SIMILAR_REVIEW_CLUSTER", "SIMILAR_REVIEW_PATTERN", "SIMILAR_REVIEW_NETWORK"
+        );
+        int safeCountVal = summary != null ? summary.safeCount() : 0;
+        int totalVal = summary != null ? summary.reviewCount() : 0;
+        double realReviewRatio = totalVal > 0 ? Math.round(safeCountVal * 1000.0 / totalVal) / 10.0 : 0.0;
+
+        double adSuspicionRatio = 0.0;
+        double repetitiveRatio = 0.0;
+        if (detailResponse != null && detailResponse.results() != null && !detailResponse.results().isEmpty()) {
+            int total = detailResponse.results().size();
+            long adCount = detailResponse.results().stream()
+                    .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> adCodes.contains(reason.code())))
+                    .count();
+            long repCount = detailResponse.results().stream()
+                    .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> "REPETITIVE_KEYWORD".equals(reason.code())))
+                    .count();
+            adSuspicionRatio = Math.round(adCount * 1000.0 / total) / 10.0;
+            repetitiveRatio = Math.round(repCount * 1000.0 / total) / 10.0;
+        }
+
         return new ProductAnalysisResponse(
                 productId,
                 summary != null ? summary.averageRti() : 50.0,
@@ -75,7 +103,10 @@ public record ProductAnalysisResponse(
                 summary != null ? summary.warnCount() : 0,
                 summary != null ? summary.dangerCount() : 0,
                 reviewDtos,
-                trendDtos
+                trendDtos,
+                realReviewRatio,
+                adSuspicionRatio,
+                repetitiveRatio
         );
     }
 }
