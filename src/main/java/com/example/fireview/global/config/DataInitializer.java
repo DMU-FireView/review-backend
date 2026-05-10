@@ -9,6 +9,7 @@ import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
 import com.example.fireview.domain.review.repository.ReviewRepository;
 import com.example.fireview.domain.review.service.RtiEngineService;
+import com.example.fireview.domain.user.entity.OAuthProvider;
 import com.example.fireview.domain.user.entity.Role;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
@@ -52,6 +53,7 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("password1!"))
                 .nickname("관리자")
                 .role(Role.ADMIN)
+                .provider(OAuthProvider.LOCAL)
                 .onboardingCompleted(true)
                 .build());
 
@@ -60,6 +62,7 @@ public class DataInitializer implements CommandLineRunner {
                 .password(passwordEncoder.encode("password1!"))
                 .nickname("테스트유저")
                 .role(Role.USER)
+                .provider(OAuthProvider.LOCAL)
                 .onboardingCompleted(false)
                 .build());
     }
