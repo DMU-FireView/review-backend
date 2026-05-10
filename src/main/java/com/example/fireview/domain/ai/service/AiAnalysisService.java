@@ -4,16 +4,25 @@ import com.example.fireview.domain.ai.client.AiServerClient;
 import com.example.fireview.domain.ai.dto.request.AiAnalyzeRequest;
 import com.example.fireview.domain.ai.dto.response.AiProductDetailResponse;
 import com.example.fireview.domain.ai.dto.response.AiProductListResponse;
+import com.example.fireview.domain.ai.dto.response.AiProductRiskReportResponse;
 import com.example.fireview.domain.ai.dto.response.AiProductSummary;
 import com.example.fireview.domain.ai.dto.response.AiRtiTrendResponse;
 import com.example.fireview.domain.ai.dto.response.ProductAnalysisResponse;
+import com.example.fireview.domain.ai.dto.response.SampleReview;
+import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
+import com.example.fireview.domain.review.entity.Review;
+import com.example.fireview.domain.review.entity.TrustGrade;
 import com.example.fireview.domain.review.repository.ReviewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -65,8 +74,14 @@ public class AiAnalysisService {
         AiProductDetailResponse detailResponse = detailFuture.join();
         AiRtiTrendResponse trendResponse = trendFuture.join();
 
+        // risk-report 호출 → 리뷰 내용 포함 (sample_reviews)
+        AiProductRiskReportResponse riskReport =
+                safeCall(() -> aiServerClient.analyzeProductRiskReport(request), "risk-report");
+
         // AI 분석 결과로 DB 동기화
-        if (detailResponse != null && detailResponse.results() != null) {
+        if (riskReport != null && riskReport.sampleReviews() != null && !riskReport.sampleReviews().isEmpty()) {
+            syncReviewsFromRiskReport(productId, riskReport.sampleReviews());
+        } else if (detailResponse != null && detailResponse.results() != null) {
             updateReviewRtiScores(detailResponse);
         }
         if (listResponse != null && listResponse.products() != null && !listResponse.products().isEmpty()) {
@@ -88,6 +103,72 @@ public class AiAnalysisService {
         } catch (Exception e) {
             log.warn("[AI Analysis] {} 호출 실패 (무시하고 계속): {}", label, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * risk-report의 sample_reviews를 Spring DB reviews 테이블에 저장.
+     * 이미 존재하는 리뷰는 RTI 점수만 업데이트하고 중복 저장하지 않음.
+     */
+    private void syncReviewsFromRiskReport(String naverProductId, List<SampleReview> sampleReviews) {
+        Product product = productRepository.findByNaverProductId(naverProductId)
+                .or(() -> {
+                    try { return productRepository.findById(Long.parseLong(naverProductId)); }
+                    catch (NumberFormatException e) { return java.util.Optional.empty(); }
+                })
+                .orElse(null);
+
+        if (product == null) {
+            log.warn("[AI Analysis] 리뷰 동기화 실패 - 상품 없음: naverProductId={}", naverProductId);
+            return;
+        }
+
+        final Product finalProduct = product;
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy.MM.dd");
+
+        for (SampleReview sr : sampleReviews) {
+            try {
+                Long reviewId = Long.parseLong(sr.review_id());
+                if (reviewRepository.existsById(reviewId)) {
+                    reviewRepository.findById(reviewId).ifPresent(r -> {
+                        r.updateRtiScore(0); // level로 재계산
+                        reviewRepository.save(r);
+                    });
+                    continue;
+                }
+
+                LocalDateTime writtenAt;
+                try {
+                    writtenAt = java.time.LocalDate.parse(sr.date(), formatter).atStartOfDay();
+                } catch (DateTimeParseException ex) {
+                    writtenAt = LocalDateTime.now();
+                }
+
+                List<String> reasonMessages = sr.reasons() != null
+                        ? sr.reasons().stream().map(r -> r.message()).filter(m -> m != null && !m.isBlank()).toList()
+                        : List.of();
+
+                int rti = switch (sr.level()) { case "safe" -> 85; case "danger" -> 30; default -> 55; };
+                TrustGrade grade = TrustGrade.fromRti(rti);
+
+                Review review = Review.builder()
+                        .id(reviewId)
+                        .product(finalProduct)
+                        .reviewerNickname(sr.author() != null ? sr.author() : "익명")
+                        .reviewerId(sr.author() != null ? sr.author() : "unknown")
+                        .content(sr.content() != null ? sr.content() : "")
+                        .rating(sr.rating() != null ? sr.rating() : 0)
+                        .rtiScore((double) rti)
+                        .trustGrade(grade)
+                        .reasons(reasonMessages)
+                        .writtenAt(writtenAt)
+                        .isVerifiedPurchase(false)
+                        .build();
+                reviewRepository.save(review);
+                log.info("[AI Analysis] 리뷰 저장: reviewId={}, product={}", reviewId, naverProductId);
+            } catch (Exception e) {
+                log.warn("[AI Analysis] 리뷰 저장 실패: {}", e.getMessage());
+            }
         }
     }
 
