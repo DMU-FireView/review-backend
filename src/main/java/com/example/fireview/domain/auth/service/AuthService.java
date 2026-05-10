@@ -39,10 +39,10 @@ public class AuthService {
                 .provider(OAuthProvider.LOCAL)
                 .onboardingCompleted(false)
                 .build();
-        userRepository.save(user);
+        User saved = userRepository.save(user);
 
-        String token = jwtTokenProvider.generateToken(user);
-        return new LoginResponse(token, user.getEmail(), user.getNickname(), user.getRole(), false);
+        String token = jwtTokenProvider.generateToken(saved);
+        return new LoginResponse(token, saved.getEmail(), saved.getNickname(), saved.getRole(), false);
     }
 
     public LoginResponse login(LoginRequest request) {
