@@ -30,17 +30,23 @@ public class ReviewService {
     private final AtiService atiService;
 
     public List<ReviewResponse> getReviewsByProduct(Long productId, Double minScore) {
-        // 상품 내 모든 리뷰어의 ATI를 한 번에 조회 (N+1 방지)
-        java.util.Map<String, Double> atiMap = atiService.calculateAtiMapByProduct(productId);
+        // naverProductId로 요청 시 실제 DB id로 변환 (네이버 상품 ID → DB PK)
+        Long resolvedId = productRepository.findById(productId)
+                .map(Product::getId)
+                .orElseGet(() -> productRepository.findByNaverProductId(String.valueOf(productId))
+                        .map(Product::getId)
+                        .orElse(productId));
+
+        java.util.Map<String, Double> atiMap = atiService.calculateAtiMapByProduct(resolvedId);
 
         if (minScore != null && minScore > 0) {
             return reviewRepository
-                    .findByProduct_IdAndRtiScoreGreaterThanEqual(productId, minScore)
+                    .findByProduct_IdAndRtiScoreGreaterThanEqual(resolvedId, minScore)
                     .stream()
                     .map(r -> ReviewResponse.of(r, atiMap.getOrDefault(r.getReviewerId(), 50.0)))
                     .toList();
         }
-        return reviewRepository.findByProduct_IdOrderByRtiScoreDesc(productId)
+        return reviewRepository.findByProduct_IdOrderByRtiScoreDesc(resolvedId)
                 .stream()
                 .map(r -> ReviewResponse.of(r, atiMap.getOrDefault(r.getReviewerId(), 50.0)))
                 .toList();
