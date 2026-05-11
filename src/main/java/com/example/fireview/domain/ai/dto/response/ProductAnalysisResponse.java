@@ -51,7 +51,7 @@ public record ProductAnalysisResponse(
                     : java.util.Map.of();
 
             reviewDtos = riskReport.sampleReviews().stream()
-                    .map(sample -> ReviewAnalysisDto.from(sample, detailMap.get(sample.review_id())))
+                    .map(sample -> ReviewAnalysisDto.from(sample, detailMap.get(sample.reviewId())))
                     .toList();
         } else if (detailResponse != null && detailResponse.results() != null) {
             reviewDtos = detailResponse.results().stream()
