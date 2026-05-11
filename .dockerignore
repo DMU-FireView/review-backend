@@ -1,0 +1,9 @@
+.git
+.gradle
+build
+.claude
+*.md
+compose.yaml
+Procfile
+src/main/resources/application-secret.properties
+.env
