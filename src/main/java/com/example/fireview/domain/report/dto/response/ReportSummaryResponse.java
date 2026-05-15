@@ -30,7 +30,7 @@ public record ReportSummaryResponse(
                 report.getId(),
                 report.getReview().getId(),
                 summary,
-                report.getReview().getProduct().getTitle(),
+                report.getReview().getProduct().getName(),
                 report.getReason(),
                 report.getReason().getDescription(),
                 report.getStatus(),

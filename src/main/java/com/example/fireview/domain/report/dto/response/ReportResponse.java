@@ -25,7 +25,7 @@ public record ReportResponse(
                 report.getId(),
                 report.getReview().getId(),
                 report.getReview().getContent(),
-                report.getReview().getProduct().getTitle(),
+                report.getReview().getProduct().getName(),
                 report.getReason(),
                 report.getReason().getDescription(),
                 report.getDetail(),
