@@ -3,6 +3,7 @@ package com.example.fireview.domain.auth.oauth2;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
 import org.springframework.security.oauth2.core.endpoint.OAuth2AuthorizationRequest;
 import org.springframework.stereotype.Component;
@@ -11,6 +12,7 @@ import org.springframework.util.SerializationUtils;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * OAuth2 authorization request를 HTTP 세션 대신 쿠키에 저장한다.
@@ -19,6 +21,7 @@ import java.util.Optional;
  * JSESSIONID는 Tomcat 내부 finalization 경로로 설정되어 SameSite=None 적용이 불안정하다.
  * 쿠키에 직접 addHeader("Set-Cookie", ...) 로 저장하면 cross-site 콜백에서도 확실히 전달된다.
  */
+@Slf4j
 @Component
 public class HttpCookieOAuth2AuthorizationRequestRepository
         implements AuthorizationRequestRepository<OAuth2AuthorizationRequest> {
@@ -28,9 +31,11 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
 
     @Override
     public OAuth2AuthorizationRequest loadAuthorizationRequest(HttpServletRequest request) {
-        return getCookie(request, OAUTH2_AUTHORIZATION_REQUEST_COOKIE)
-                .map(cookie -> deserialize(cookie.getValue()))
-                .orElse(null);
+        Optional<Cookie> cookie = getCookie(request, OAUTH2_AUTHORIZATION_REQUEST_COOKIE);
+        OAuth2AuthorizationRequest result = cookie.map(c -> deserialize(c.getValue())).orElse(null);
+        log.info("[CookieOAuth2Repo] load - cookie_found={}, deserialized={}",
+                cookie.isPresent(), result != null);
+        return result;
     }
 
     @Override
@@ -39,17 +44,33 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                                          HttpServletResponse response) {
         if (authorizationRequest == null) {
             deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE);
+            log.info("[CookieOAuth2Repo] save - authRequest=null, cookie 삭제");
             return;
         }
-        addCookie(response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE,
-                serialize(authorizationRequest), COOKIE_EXPIRE_SECONDS);
+        String serialized = serialize(authorizationRequest);
+        addCookie(response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE, serialized, COOKIE_EXPIRE_SECONDS);
+        log.info("[CookieOAuth2Repo] save - state={}, cookieSize={}",
+                authorizationRequest.getState(), serialized.length());
     }
 
     @Override
     public OAuth2AuthorizationRequest removeAuthorizationRequest(HttpServletRequest request,
                                                                   HttpServletResponse response) {
+        // 수신된 쿠키 목록 로그
+        String cookieNames = request.getCookies() != null
+                ? Arrays.stream(request.getCookies())
+                        .map(Cookie::getName)
+                        .collect(Collectors.joining(", "))
+                : "(쿠키 없음)";
+        log.info("[CookieOAuth2Repo] remove - 수신된 쿠키 목록: [{}]", cookieNames);
+
         OAuth2AuthorizationRequest authRequest = loadAuthorizationRequest(request);
-        deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE);
+        if (authRequest != null) {
+            deleteCookie(request, response, OAUTH2_AUTHORIZATION_REQUEST_COOKIE);
+            log.info("[CookieOAuth2Repo] remove - state={} 찾음, 쿠키 삭제", authRequest.getState());
+        } else {
+            log.warn("[CookieOAuth2Repo] remove - oauth2_auth_request 쿠키 없음 또는 역직렬화 실패");
+        }
         return authRequest;
     }
 
