@@ -17,6 +17,7 @@ public enum ErrorCode {
     // Review
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
     FEEDBACK_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 피드백을 제출하셨습니다."),
+    FEEDBACK_NOT_FOUND(HttpStatus.NOT_FOUND, "피드백 내역을 찾을 수 없습니다."),
 
     // Onboarding
     PREFERENCE_ALREADY_SET(HttpStatus.CONFLICT, "이미 온보딩이 완료되었습니다."),
