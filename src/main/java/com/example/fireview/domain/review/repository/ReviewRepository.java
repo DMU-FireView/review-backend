@@ -1,5 +1,6 @@
 package com.example.fireview.domain.review.repository;
 
+import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -8,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
+    List<Review> findByProduct(Product product);
     List<Review> findByProduct_IdOrderByRtiScoreDesc(Long productId);
     List<Review> findByProduct_IdAndTrustGrade(Long productId, TrustGrade grade);
     List<Review> findByProduct_IdAndRtiScoreGreaterThanEqual(Long productId, double minScore);
