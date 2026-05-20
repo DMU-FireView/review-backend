@@ -2,6 +2,7 @@ package com.example.fireview.domain.review.service;
 
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
+import com.example.fireview.domain.review.dto.FeedbackHistoryResponse;
 import com.example.fireview.domain.review.dto.ReviewFeedbackRequest;
 import com.example.fireview.domain.review.dto.ReviewResponse;
 import com.example.fireview.domain.review.entity.Review;
@@ -13,6 +14,8 @@ import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -68,6 +71,21 @@ public class ReviewService {
                 .feedbackType(request.feedbackType())
                 .build();
         feedbackRepository.save(feedback);
+    }
+
+    /** 내가 제출한 피드백 목록 조회 */
+    public Page<FeedbackHistoryResponse> getMyFeedbacks(String userEmail, Pageable pageable) {
+        User user = userService.findByEmail(userEmail);
+        return feedbackRepository.findByUserIdWithReview(user.getId(), pageable)
+                .map(FeedbackHistoryResponse::from);
+    }
+
+    /** 내가 제출한 피드백 단건 조회 */
+    public FeedbackHistoryResponse getMyFeedback(Long feedbackId, String userEmail) {
+        User user = userService.findByEmail(userEmail);
+        return feedbackRepository.findByIdAndUser_Id(feedbackId, user.getId())
+                .map(FeedbackHistoryResponse::from)
+                .orElseThrow(() -> new CustomException(ErrorCode.FEEDBACK_NOT_FOUND));
     }
 
     @Transactional
