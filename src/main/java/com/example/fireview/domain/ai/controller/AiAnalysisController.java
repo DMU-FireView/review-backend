@@ -28,20 +28,20 @@ public class AiAnalysisController {
      * 상품 분석 요청
      *
      * [흐름]
-     * 프론트 → POST /api/analysis/product { "productId": "7195971829" }
-     *        → BE가 AI 서버에 크롤링+분석 요청
+     * 프론트 → POST /api/analysis/product { "productId": "7195971829", "productUrl": "https://..." }
+     *        → BE가 AI 서버에 크롤링+분석 요청 (page_url 포함)
      *        → AI 서버 결과를 프론트에 반환
      *
-     * @param request productId (네이버 상품 ID 또는 내부 DB ID)
+     * @param request productId (필수), productUrl (선택 - AI 서버 크롤링 보조)
      * @return 분석 결과 (평균 RTI, 등급, 리뷰 목록, 추이 데이터)
      */
     @PostMapping("/product")
     public ResponseEntity<ApiResponse<ProductAnalysisResponse>> analyzeProduct(
             @Valid @RequestBody ProductAnalyzeRequest request
     ) {
-        log.info("[AiAnalysisController] 분석 요청: productId={}", request.productId());
+        log.info("[AiAnalysisController] 분석 요청: productId={}, productUrl={}", request.productId(), request.productUrl());
 
-        ProductAnalysisResponse response = aiAnalysisService.analyzeProduct(request.productId());
+        ProductAnalysisResponse response = aiAnalysisService.analyzeProduct(request.productId(), request.productUrl());
 
         return ResponseEntity.ok(ApiResponse.success(response));
     }
