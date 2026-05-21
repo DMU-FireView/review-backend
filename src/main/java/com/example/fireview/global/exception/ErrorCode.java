@@ -21,6 +21,9 @@ public enum ErrorCode {
     // Onboarding
     PREFERENCE_ALREADY_SET(HttpStatus.CONFLICT, "이미 온보딩이 완료되었습니다."),
 
+    // Notification
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "알림을 찾을 수 없습니다."),
+
     // Report
     REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "신고 내역을 찾을 수 없습니다."),
     REPORT_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 신고한 리뷰입니다."),
