@@ -55,7 +55,6 @@ public class SecurityConfig {
                         .requestMatchers("/api/reviews/*/feedback").authenticated()
                         .requestMatchers("/api/keywords/**").permitAll()
                         .requestMatchers("/api/analysis/**").permitAll()
-                        .requestMatchers("/api/tossplace/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
                         // OAuth2 로그인 진입 경로 허용
