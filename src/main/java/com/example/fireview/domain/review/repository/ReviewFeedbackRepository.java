@@ -25,4 +25,7 @@ public interface ReviewFeedbackRepository extends JpaRepository<ReviewFeedback, 
 
     /** 내가 제출한 피드백 단건 조회 (본인 확인) */
     Optional<ReviewFeedback> findByIdAndUser_Id(Long feedbackId, Long userId);
+
+    /** 내가 제출한 피드백 수 */
+    long countByUser_Id(Long userId);
 }
