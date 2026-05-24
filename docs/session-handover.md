@@ -1,5 +1,5 @@
 # 세션 인수인계 자료
-> 최종 업데이트: 2026-06-02 | 프로젝트: FireView (review-backend)
+> 최종 업데이트: 2026-06-09 | 프로젝트: FireView (review-backend)
 
 ---
 
@@ -24,6 +24,9 @@
 docker logs --tail 50 fireview
 docker logs --tail 50 fireview 2>&1 | grep -E "ERROR|Exception"
 
+# OAuth2 쿠키 저장소 디버그 로그 확인
+docker logs -f fireview 2>&1 | grep "CookieOAuth2Repo"
+
 # 배포 완료 확인 (Started FireViewApplication 뜨면 완료)
 docker logs --tail 5 fireview
 
@@ -40,14 +43,15 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 ## 🔄 배포 플로우
 
 ```
-브랜치 생성 → 작업 → PR → main 머지 → GitHub Actions 자동 배포
+브랜치 생성 → 작업(커밋 최대한 분리) → PR → main 머지(Merge commit) → GitHub Actions 자동 배포
 ```
 - **main 직접 커밋 금지**
-- GitHub Actions CI/CD로 머지 즉시 자동 배포됨 (`docker-compose` 명령어 불필요)
+- PR 머지 시 **Squash 아닌 Merge commit** 사용 → 커밋 수 보존
+- GitHub Actions CI/CD로 머지 즉시 자동 배포됨
 
 ---
 
-## ✅ 이전 세션 완료 PR 목록
+## ✅ 이전 세션 완료 PR 목록 (~ 2026-06-02)
 
 | PR | 내용 |
 |----|------|
@@ -62,62 +66,116 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 | #70 | NaverProductCache 인메모리 → Redis 전환 (TTL 24시간) |
 | #71 | Docker 컨테이너 Redis 호스트 접근 문제 수정 (localhost → EC2 내부 IP) |
 | #72 | Redis 역직렬화 오류 수정 (String 기반 JSON 직렬화로 교체) |
+| #83 | AI review_id를 DB PK로 쓰던 충돌 버그 수정 |
+| #84 | 실사용/광고성/반복표현 비율 통계 필드 추가 |
+| #85 | 주요 판단 신호(trustSignals) 계산 및 응답 추가 |
+| #86 | 네이버 API productId null 시 fallback ID로 서버 기동 오류 수정 |
 
 ---
 
-## ✅ 이번 세션(2026-06-02)에서 완료한 PR 목록
+## ✅ 이번 세션(2026-06-05 ~ 2026-06-09)에서 완료한 PR 목록
 
 | PR | 브랜치 | 내용 |
 |----|--------|------|
-| #83 | `fix/review-id-collision` | AI review_id를 DB PK로 쓰던 충돌 버그 수정 |
-| #84 | `feat/review-ratio-stats` | 실사용/광고성/반복표현 비율 통계 필드 추가 |
-| #85 | `feat/trust-signals` | 주요 판단 신호(trustSignals) 계산 및 응답 추가 + 빌드 오류 수정 |
-| #86 | `fix/data-initializer-null-product-id` | 네이버 API productId null 시 fallback ID로 서버 기동 오류 수정 |
+| #87~#95 | `fix/oauth2-*` | OAuth2 로그인 실패 원인 추적 및 다양한 수정 시도 |
+| #101 | `fix/oauth2-cookie-storage` | **OAuth2 쿠키 기반 state 저장으로 전환** (세션 의존 완전 제거) |
+| #102 | `debug/oauth2-cookie-trace` | OAuth2 쿠키 저장소 상세 로그 추가 (원인 추적용) |
+| #103 | `feat/report-system` | **리뷰 신고 시스템 구현** (8개 커밋) |
+| #104 | `feat/feedback-history` | **피드백 내역 조회 구현** (6개 커밋) |
+| #105 | `feat/notification-system` | **알림 시스템 구현** (8개 커밋) |
+| #106 | `feat/mypage-api` | **마이페이지 API 구현** (7개 커밋) |
 
 ---
 
-## 🐛 이번 세션에서 해결한 버그
+## 🐛 이번 세션에서 해결한 주요 이슈
 
-### 1. 리뷰 저장 안 되는 버그 (PR #83)
-- **원인**: AI 서버가 반환하는 `review_id`("1", "3")를 DB PK로 직접 사용 → 다른 상품 리뷰와 ID 충돌 → `existsById` true 반환 → 저장 스킵
-- **수정**: `Review.id`에 `@GeneratedValue(IDENTITY)` 추가, 중복 체크를 `(product_id, reviewerId, writtenAt)` 조합으로 변경
-- **DB 초기화 필요**: `TRUNCATE TABLE review_reasons, reviews RESTART IDENTITY CASCADE`
+### 1. OAuth2 로그인 반복 실패 (PR #101)
+- **확정된 원인**: JSESSIONID는 Tomcat 내부 `CoyoteResponse`로 직접 설정됨 → 서블릿 필터(`SameSiteCookieFilter.addCookie()`)가 가로챌 수 없음 → SameSite=None 미적용 → 네이버 콜백 시 JSESSIONID 전달 안 됨
+- **수정**: `HttpCookieOAuth2AuthorizationRequestRepository` 도입. OAuth2 state를 세션 대신 **직접 Set-Cookie 헤더에 쿠키로 저장** → JSESSIONID 의존 완전 제거
+- **핵심 코드**: `response.addHeader("Set-Cookie", "oauth2_auth_request=...; SameSite=None; Secure")`
 
-### 2. 비율 통계 0% 표시 (PR #84)
-- **원인**: AI 서버 MVP에서 percentage 필드 제외 → 백엔드에서 계산 안 함
-- **수정**: `product-detail` 응답의 reason code 집계로 직접 계산
-  - `realReviewRatio`: safe_count / total_reviews
-  - `adSuspicionRatio`: AD 관련 코드(PURCHASE_NOT_VERIFIED 등) 보유 리뷰 비율
-  - `repetitiveRatio`: REPETITIVE_KEYWORD 보유 리뷰 비율
+### 2. OAuth2 여전히 실패 (미해결 — 프론트 이슈)
+- **현상**: 백엔드 수정 후에도 `login?error=oauth2` 계속 발생
+- **확인된 원인**: 프론트가 `api.beens.kr/oauth2/authorization/naver`를 **경유하지 않고** Naver SDK 또는 직접 URL로 이동 중 → 백엔드가 state 쿠키를 저장할 기회 없음
+- **해결 방법**: 프론트 팀이 로그인 버튼 URL을 `https://api.beens.kr/oauth2/authorization/naver`로 변경해야 함
 
-### 3. 주요 판단 신호 미표시 (PR #85)
-- **원인**: AI 서버 MVP에서 제외된 데이터 → 프론트 하드코딩 빈 배열
-- **수정**: 백엔드에서 `TrustSignalDto` 생성 후 집계 계산
-  - 구매인증 리뷰 비율 / 텍스트 다양성 / 반복 표현 비율 / 작성 시점 패턴
+---
 
-### 4. 서버 기동 실패 (PR #86)
-- **원인**: `DataInitializer`에서 네이버 API productId null 시 `Product.id=null` persist 시도
-- **수정**: fallback ID(900_000_000_000~) 사용, `@Profile("!test")` 추가
+## 📦 현재 구현된 API 전체 목록
+
+### 인증 (`/api/auth/**`) — permitAll
+| Method | URL | 설명 |
+|--------|-----|------|
+| POST | `/api/auth/signup` | 일반 회원가입 |
+| POST | `/api/auth/login` | 일반 로그인 |
+| GET | `/oauth2/authorization/naver` | 네이버 OAuth2 시작 |
+| GET | `/oauth2/authorization/google` | 구글 OAuth2 시작 |
+
+### 상품 / 검색 (`/api/products`, `/api/search`) — permitAll
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/products/{productId}` | 상품 상세 |
+| GET | `/api/products/{productId}/reviews` | 상품 리뷰 목록 |
+| GET | `/api/search?keyword=` | 네이버 쇼핑 검색 |
+| POST | `/api/analysis/product` | AI 분석 트리거 |
+
+### 마이페이지 (`/api/users/me`) — 인증 필요
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/users/me` | 프로필 조회 |
+| GET | `/api/users/me/stats` | 이용 통계 (찜/피드백/신고/알림 수) |
+| PATCH | `/api/users/me` | 프로필 수정 (닉네임, 이미지) |
+| DELETE | `/api/users/me` | 회원 탈퇴 |
+
+### 피드백 (`/api/reviews`) — 인증 필요
+| Method | URL | 설명 |
+|--------|-----|------|
+| POST | `/api/reviews/{reviewId}/feedback` | 피드백 제출 (REAL/FAKE) |
+| GET | `/api/reviews/feedbacks/me` | 내 피드백 목록 (페이징) |
+| GET | `/api/reviews/feedbacks/me/{feedbackId}` | 내 피드백 단건 조회 |
+
+### 신고 (`/api/reports`) — 인증 필요
+| Method | URL | 설명 |
+|--------|-----|------|
+| POST | `/api/reports/reviews/{reviewId}` | 신고 제출 |
+| GET | `/api/reports/me` | 내 신고 목록 (페이징) |
+| GET | `/api/reports/me/{reportId}` | 내 신고 단건 조회 |
+
+### 알림 (`/api/notifications`) — 인증 필요
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/notifications/me` | 내 알림 목록 (페이징) |
+| GET | `/api/notifications/me/unread-count` | 읽지 않은 알림 수 |
+| PATCH | `/api/notifications/{id}/read` | 단건 읽음 처리 |
+| PATCH | `/api/notifications/me/read-all` | 전체 읽음 처리 |
+
+### 찜 / 장바구니 — 인증 필요
+| Method | URL | 설명 |
+|--------|-----|------|
+| GET | `/api/wishlist` | 찜 목록 조회 |
+| POST | `/api/wishlist/{productId}` | 찜 추가 |
+| DELETE | `/api/wishlist/{productId}` | 찜 해제 |
+| GET | `/api/cart` | 장바구니 조회 |
+| POST | `/api/cart` | 장바구니 추가 |
+| DELETE | `/api/cart/{itemId}` | 장바구니 삭제 |
 
 ---
 
 ## 📊 현재 DB 상태
 
 ```
-products: 33개 (naverProductId 정상 저장, id = naverProductId)
+products: 33개 (naverProductId 정상 저장)
 reviews: 1117개 (DataInitializer 생성 더미 데이터)
 users: DataInitializer 생성 (admin@fireview.com, user@fireview.com)
+reports: 테이블 생성됨 (데이터 없음)
+notifications: 테이블 생성됨 (데이터 없음)
 ```
 
 ### DB 전체 초기화가 필요할 때 순서
 ```bash
-# 1. products 관련
-TRUNCATE TABLE review_reasons, review_feedbacks, reviews, product_platform_links, products CASCADE;
-# 2. users
-TRUNCATE TABLE users CASCADE;
-# 3. 기타
-TRUNCATE TABLE search_keywords CASCADE;
-# 4. 서버 재시작 → DataInitializer 자동 실행
+TRUNCATE TABLE notifications, reports, review_feedbacks, review_reasons, reviews,
+               product_platform_links, products, users CASCADE;
+# 서버 재시작 → DataInitializer 자동 실행
 docker restart fireview
 ```
 
@@ -128,89 +186,17 @@ docker restart fireview
 ### 연결 상태: ✅ 정상
 
 ### AI 서버 엔드포인트 (모두 POST, TriggerRequest 공통 사용)
-| 엔드포인트 | 설명 | 응답 DTO |
-|-----------|------|---------|
-| `/api/internal/ai/products/product-list` | 상품 RTI 요약 | `AiProductListResponse` |
-| `/api/internal/ai/reviews/product-detail` | 개별 리뷰 분석 (reason code 포함) | `AiProductDetailResponse` |
-| `/api/internal/ai/products/rti-trend` | 30일 추이 | `AiRtiTrendResponse` |
-| `/api/internal/ai/reviews/report` | 리뷰 상세 리포트 | `AiReviewReportResponse` |
-| `/api/internal/ai/products/risk-report` | 상품 위험도 리포트 + sample_reviews | `AiProductRiskReportResponse` |
+| 엔드포인트 | 설명 |
+|-----------|------|
+| `/api/internal/ai/products/product-list` | 상품 RTI 요약 |
+| `/api/internal/ai/reviews/product-detail` | 개별 리뷰 분석 (reason code 포함) |
+| `/api/internal/ai/products/rti-trend` | 30일 추이 |
+| `/api/internal/ai/reviews/report` | 리뷰 상세 리포트 |
+| `/api/internal/ai/products/risk-report` | 상품 위험도 리포트 + sample_reviews |
 
 ### ⚠️ 중요: AI 서버 데이터 있는 상품
 - `53530143052` → AI 서버에 데이터 있음 (테스트용)
-- 대부분의 상품은 AI 서버에 데이터 없음 → `product-detail: []` 반환 → 비율/신호 계산 불가
-
-### 페이지 로딩 흐름
-1. 페이지 진입 → DB 기존 데이터로 먼저 표시 (비율 0%)
-2. 백그라운드에서 AI 분석 트리거 (수초 소요)
-3. 분석 완료 → 실제 값으로 업데이트 (정상 동작)
-
----
-
-## 📡 백엔드 API 응답 구조
-
-### `POST /api/analysis/product`
-```json
-{
-  "productId": "53530143052",
-  "averageRti": 78.33,
-  "level": "warn",
-  "reviewCount": 3,
-  "safeCount": 1,
-  "warnCount": 2,
-  "dangerCount": 0,
-  "reviews": [ { "reviewId", "content", "author", "date", "rti", "level", "textScore", "behaviorScore", "networkScore", "reasons" } ],
-  "trend": [ ... ],
-  "realReviewRatio": 33.3,
-  "adSuspicionRatio": 66.7,
-  "repetitiveRatio": 33.3,
-  "trustSignals": [
-    { "label": "구매인증 리뷰 비율", "value": "보통", "isPositive": false },
-    { "label": "텍스트 다양성",     "value": "보통", "isPositive": false },
-    { "label": "반복 표현 비율",    "value": "보통", "isPositive": false },
-    { "label": "작성 시점 패턴",    "value": "자연스러움", "isPositive": true }
-  ]
-}
-```
-
-### `GET /api/products/{productId}/reviews`
-```json
-{
-  "id": 4471,
-  "productId": 53530143052,
-  "reviewerNickname": "reviewer_0099",
-  "content": "...",
-  "rating": 5,
-  "trustGrade": "SUSPICIOUS",
-  "trustGradeLabel": "의심",
-  "trustGradeColor": "#EAB308",
-  "reasons": [ "반복 표현 탐지: '대박' 2회", ... ],
-  "writtenAt": "2026-05-25T00:00:00",
-  "isVerifiedPurchase": false,
-  "reviewerAtiScore": 55.0
-}
-```
-
----
-
-## 📦 카테고리 구조
-
-3계층으로 구성됨.
-
-```
-대분류 (MajorCategory enum, 14개): 디지털/가전, 패션의류, 패션잡화, 뷰티, 식품 ...
-  └── 중분류 (Category enum, ~50개): DIGITAL_MOBILE, DIGITAL_PC, ACC_SHOES ...
-        └── 소분류 (subCategory String): Naver category3 값 그대로 저장
-```
-
-### DB 마이그레이션 주의사항
-- `products`, `user_preferred_categories` 두 테이블 모두 category 컬럼 보유
-- enum 값 변경 시 두 테이블 모두 마이그레이션 필요
-- 마이그레이션 전 constraint 제거 필요:
-```sql
-ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
-ALTER TABLE user_preferred_categories DROP CONSTRAINT IF EXISTS user_preferred_categories_category_check;
-```
+- 대부분의 상품은 AI 서버에 데이터 없음 → `product-detail: []` 반환
 
 ---
 
@@ -218,14 +204,14 @@ ALTER TABLE user_preferred_categories DROP CONSTRAINT IF EXISTS user_preferred_c
 
 | 항목 | 값 |
 |------|-----|
-| 호스트 | `172.31.44.47` (EC2 내부 IP, Docker 컨테이너에서 접근) |
+| 호스트 | `172.31.44.47` (EC2 내부 IP) |
 | 포트 | `6379` |
 | 키 패턴 | `naver:product:{naverProductId}` |
 | TTL | 24시간 |
-| 직렬화 | JSON String (ObjectMapper 직접 사용, GenericJackson2JsonRedisSerializer 사용 불가) |
+| 직렬화 | JSON String (ObjectMapper 직접 사용) |
 
 ```bash
-# 캐시 전체 삭제 (역직렬화 오류 발생 시)
+# 캐시 전체 삭제
 redis6-cli keys "naver:product:*" | xargs redis6-cli del
 ```
 
@@ -235,50 +221,56 @@ redis6-cli keys "naver:product:*" | xargs redis6-cli del
 
 | 파일 | 역할 |
 |------|------|
-| `domain/ai/client/AiServerClient.java` | AI 서버 HTTP 클라이언트 (5개 엔드포인트) |
+| `domain/auth/oauth2/HttpCookieOAuth2AuthorizationRequestRepository.java` | OAuth2 state 쿠키 저장소 |
+| `domain/auth/oauth2/CustomOAuth2UserService.java` | 소셜 로그인 시 신규/기존 유저 처리 |
+| `domain/auth/oauth2/OAuth2SuccessHandler.java` | 로그인 성공 시 JWT 발급 + 프론트 리다이렉트 |
+| `domain/notification/` | 알림 엔티티 / 서비스 / 컨트롤러 |
+| `domain/report/` | 신고 엔티티 / 서비스 / 컨트롤러 |
+| `domain/user/service/UserService.java` | 프로필 조회·수정, 이용 통계, 회원 탈퇴 |
 | `domain/ai/service/AiAnalysisService.java` | AI 분석 병렬 호출 + DB 동기화 |
-| `domain/ai/dto/response/ProductAnalysisResponse.java` | 분석 결과 통합 DTO (비율/신호 계산 포함) |
-| `domain/ai/dto/response/TrustSignalDto.java` | 주요 판단 신호 DTO (판정 기준 포함) |
-| `domain/ai/dto/response/SampleReview.java` | AI risk-report sample_reviews 역직렬화 |
-| `domain/review/entity/Review.java` | @GeneratedValue(IDENTITY) 적용 |
-| `domain/review/repository/ReviewRepository.java` | existsByProduct_IdAndReviewerIdAndWrittenAt 추가 |
-| `domain/product/entity/Product.java` | id = naverProductId (수동 할당, @GeneratedValue 없음) |
-| `global/config/DataInitializer.java` | 더미 데이터 초기화 (@Profile("!test"), fallback ID 적용) |
-| `global/config/RedisConfig.java` | Redis String 직렬화 설정 |
-| `global/config/RestTemplateConfig.java` | AI 전용 RestTemplate (30초 타임아웃) |
-| `global/security/CustomAuthenticationEntryPoint.java` | 전역 401 포맷 처리 |
-| `domain/product/cache/NaverProductCache.java` | 네이버 상품 Redis 캐시 (TTL 24h) |
-| `domain/product/entity/MajorCategory.java` | 대분류 enum (14개) |
-| `domain/product/entity/Category.java` | 중분류 enum (~50개, getMajor() 포함) |
-| `domain/product/dto/CategoryMapper.java` | Naver category1+2 → 내부 Category 변환 |
-| `domain/product/repository/ProductRepository.java` | JOIN FETCH 쿼리, findByNaverProductId 포함 |
-| `domain/search/service/NaverSearchService.java` | 검색 (DB + 네이버 멀티페이지 병합) |
-| `docs/frontend-integration-guide.md` | 프론트엔드 연동 수정 가이드 |
+| `domain/ai/dto/response/ProductAnalysisResponse.java` | 분석 결과 통합 DTO |
+| `domain/product/entity/Product.java` | id = naverProductId (수동 할당) |
+| `global/config/SecurityConfig.java` | Spring Security 설정, OAuth2 쿠키 저장소 연결 |
+| `global/config/TomcatConfig.java` | Rfc6265CookieProcessor (SameSite=None) |
+| `global/filter/SameSiteCookieFilter.java` | addCookie/addHeader 쿠키 SameSite=None 보완 |
 
 ---
 
 ## ⚠️ 남은 이슈 / 다음 세션 작업 후보
 
-### 1. 리뷰 인사이트 미구현
-- **현상**: "리뷰 인사이트" 섹션 (키워드, 만족/아쉬운 포인트) 항상 빈 칸
-- **원인**: AI 서버 MVP에서 제외된 기능, NLP/키워드 추출 필요
-- **해결 방향**: AI 서버팀에 키워드 추출 API 추가 요청 필요
+### 🔴 [최우선] 프론트 수정 요청 (백엔드 작업 불필요)
 
-### 2. reason code 한국어 매핑 불일치
-- 프론트 `_codeToDescription()` 매핑 테이블이 실제 AI 코드와 불일치
-- `frontend-integration-guide.md`에 수정 내용 정리 완료, 프론트 반영 필요
+1. **OAuth2 로그인 버튼 URL 수정**
+   - 네이버: `window.location.href = 'https://api.beens.kr/oauth2/authorization/naver'`
+   - 구글: `window.location.href = 'https://api.beens.kr/oauth2/authorization/google'`
 
-### 3. safe 리뷰 content null
-- AI `risk-report`의 `sample_reviews`는 `warn`/`danger`만 포함
-- `safe` 리뷰는 content/author/date가 null로 내려감
-- 의도된 동작인지 AI 서버팀 확인 필요
+2. **Flutter 비로그인 시 인증 API 호출 차단**
+   - 비로그인 상태에서 개인화 API 호출 → 401 처리 못해 앱 크래시
+   - `if (!mounted) return;` 추가, `runZonedGuarded` 전역 에러 핸들러
 
-### 4. 대부분 상품 AI 데이터 없음
-- AI 서버에 `53530143052` 등 일부 상품만 데이터 존재
-- 나머지 상품은 분석 트리거해도 빈 결과 반환
-- AI 서버팀에 데이터 수집 범위 확대 요청 필요
+### 🟡 [백엔드 미구현] 다음 구현 예정
 
-### 5. Product.id 설계 이슈
-- `Product.id` = naverProductId (수동 할당, `@GeneratedValue` 없음)
-- 네이버 API가 productId를 반환하지 않으면 fallback ID(900_000_000_000~) 사용
-- fallback ID 상품은 naverProductId가 null → AI 분석 불가
+| 순번 | 기능 | 설명 |
+|------|------|------|
+| 1 | **설정 API** | 알림 설정 저장/조회 (ON/OFF 토글별 저장) |
+| 2 | **관리자(Admin) API** | 신고 처리(상태 변경), 전체 신고 목록 조회, 사용자 목록 조회 |
+
+#### 설정 API 설계 방향
+- `UserSetting` 엔티티 추가 (user 1:1, 알림 토글 필드들)
+- `GET /api/users/me/settings` — 설정 조회
+- `PATCH /api/users/me/settings` — 설정 변경
+
+#### 관리자 API 설계 방향
+- `PATCH /api/admin/reports/{reportId}` — 신고 상태 변경 (→ 알림 자동 발송)
+- `GET /api/admin/reports` — 전체 신고 목록 (상태 필터, 페이징)
+- `GET /api/admin/users` — 전체 유저 목록
+- Role.ADMIN 권한 체크 필요 (현재 엔티티에 Role.ADMIN 존재, API 없음)
+
+### 🟠 [기존 미해결 이슈]
+
+| # | 현상 | 원인 | 해결 방향 |
+|---|------|------|-----------|
+| 1 | 리뷰 인사이트 섹션 빈 칸 | AI 서버 MVP에서 NLP 키워드 추출 미구현 | AI 서버팀에 키워드 추출 API 요청 |
+| 2 | reason code 한국어 매핑 불일치 | 프론트 `_codeToDescription()` 테이블 오래된 값 | `frontend-integration-guide.md` 참고하여 프론트 수정 |
+| 3 | safe 리뷰 content null | AI risk-report에 warn/danger만 포함 | AI 서버팀에 safe 포함 여부 확인 |
+| 4 | 대부분 상품 AI 데이터 없음 | AI 서버에 일부 상품만 데이터 존재 | AI 서버팀에 데이터 수집 범위 확대 요청 |
