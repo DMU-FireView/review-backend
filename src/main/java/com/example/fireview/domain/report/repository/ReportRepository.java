@@ -30,4 +30,7 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     @Query("SELECT r FROM Report r JOIN FETCH r.reporter JOIN FETCH r.review "
          + "ORDER BY r.createdAt DESC")
     Page<Report> findAllWithDetails(Pageable pageable);
+
+    /** 내가 제출한 신고 수 */
+    long countByReporter_Id(Long reporterId);
 }

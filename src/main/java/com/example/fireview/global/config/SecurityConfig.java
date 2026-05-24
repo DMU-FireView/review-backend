@@ -75,6 +75,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/reviews/feedbacks/me/**").authenticated()
                         .requestMatchers("/api/reports/**").authenticated()
                         .requestMatchers("/api/notifications/**").authenticated()
+                        .requestMatchers("/api/users/me/**").authenticated()
+                        .requestMatchers("/api/users/me").authenticated()
                         .requestMatchers("/api/wishlist/**").authenticated()
                         .requestMatchers("/api/cart/**").authenticated()
                         .anyRequest().authenticated())
