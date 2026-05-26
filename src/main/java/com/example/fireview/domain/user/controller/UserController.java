@@ -2,8 +2,11 @@ package com.example.fireview.domain.user.controller;
 
 import com.example.fireview.domain.user.dto.ProfileUpdateRequest;
 import com.example.fireview.domain.user.dto.UserResponse;
+import com.example.fireview.domain.user.dto.UserSettingResponse;
+import com.example.fireview.domain.user.dto.UserSettingUpdateRequest;
 import com.example.fireview.domain.user.dto.UserStatsResponse;
 import com.example.fireview.domain.user.service.UserService;
+import com.example.fireview.domain.user.service.UserSettingService;
 import com.example.fireview.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final UserSettingService userSettingService;
 
     /**
      * 내 프로필 조회
@@ -57,5 +61,26 @@ public class UserController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void deleteMyAccount(@AuthenticationPrincipal Jwt jwt) {
         userService.deleteAccount(jwt.getSubject());
+    }
+
+    /**
+     * 알림 설정 조회
+     * GET /api/users/me/settings
+     */
+    @GetMapping("/me/settings")
+    public ApiResponse<UserSettingResponse> getMySettings(@AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.success(userSettingService.getSettings(jwt.getSubject()));
+    }
+
+    /**
+     * 알림 설정 변경
+     * PATCH /api/users/me/settings
+     */
+    @PatchMapping("/me/settings")
+    public ApiResponse<UserSettingResponse> updateMySettings(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody UserSettingUpdateRequest request) {
+        return ApiResponse.success("설정이 변경되었습니다.",
+                userSettingService.updateSettings(jwt.getSubject(), request));
     }
 }
