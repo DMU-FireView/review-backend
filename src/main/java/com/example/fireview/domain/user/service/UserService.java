@@ -70,6 +70,15 @@ public class UserService {
             user.setProfileImageUrl(request.profileImageUrl());
         }
 
+        if (request.phone() != null) {
+            user.setPhone(request.phone());
+        }
+
+        if (request.interestCategories() != null) {
+            user.getInterestCategories().clear();
+            user.getInterestCategories().addAll(request.interestCategories());
+        }
+
         return UserResponse.from(userRepository.save(user));
     }
 
