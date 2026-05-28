@@ -1,0 +1,42 @@
+name: CD - Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # GitHub Actions 탭에서 수동 실행도 가능
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/review-backend
+
+            echo "▶ 최신 코드 가져오기"
+            git pull origin main
+
+            echo "▶ Docker 이미지 빌드"
+            docker build -t fireview:latest .
+
+            echo "▶ 기존 컨테이너 교체"
+            docker stop fireview || true
+            docker rm fireview || true
+            docker run -d \
+              --name fireview \
+              --restart unless-stopped \
+              --env-file .env.prod \
+              -p 8080:8080 \
+              fireview:latest
+
+            echo "▶ 미사용 이미지 정리"
+            docker image prune -f
+
+            echo "✅ 배포 완료"
