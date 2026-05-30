@@ -21,6 +21,13 @@ public enum ErrorCode {
     // Onboarding
     PREFERENCE_ALREADY_SET(HttpStatus.CONFLICT, "이미 온보딩이 완료되었습니다."),
 
+    // Wishlist
+    WISHLIST_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 찜한 상품입니다."),
+    WISHLIST_NOT_FOUND(HttpStatus.NOT_FOUND, "찜 목록에 없는 상품입니다."),
+
+    // Cart
+    CART_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "장바구니에 없는 상품입니다."),
+
     // Search
     NAVER_API_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "네이버 검색 API가 설정되지 않았습니다."),
 
