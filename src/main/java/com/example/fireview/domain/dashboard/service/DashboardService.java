@@ -33,6 +33,20 @@ public class DashboardService {
     private final UserPreferenceRepository userPreferenceRepository;
     private final UserService userService;
 
+    /**
+     * 비회원용 공개 대시보드.
+     * 개인화 없이 RTI 상위 상품과 인기 키워드만 반환한다.
+     */
+    public DashboardResponse getPublicDashboard() {
+        return new DashboardResponse(
+                productRepository.findTop10ByOrderByAvgRtiDesc()
+                        .stream().map(ProductResponse::from).toList(),
+                List.of(),
+                getRiskyProducts(),
+                getPopularKeywords()
+        );
+    }
+
     public DashboardResponse getDashboard(String userEmail) {
         User user = userService.findByEmail(userEmail);
 
