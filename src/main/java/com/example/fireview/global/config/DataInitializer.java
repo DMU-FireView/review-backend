@@ -194,6 +194,42 @@ public class DataInitializer implements CommandLineRunner {
         return productRepository.saveAll(products);
     }
 
+    /**
+     * DB에 이미 데이터가 있을 때 placeholder 이미지를 네이버 실제 이미지로 교체.
+     * 초당 10건 제한 방지를 위해 호출 간 150ms 딜레이 적용.
+     */
+    private void updatePlaceholderImages() {
+        if (!naverShoppingClient.isConfigured()) {
+            log.debug("[DataInitializer] 네이버 API 미설정 - placeholder 이미지 업데이트 생략");
+            return;
+        }
+
+        List<Product> placeholderProducts = productRepository.findAll().stream()
+                .filter(p -> p.getImageUrl() == null
+                        || p.getImageUrl().isBlank()
+                        || p.getImageUrl().contains("placeholder"))
+                .toList();
+
+        if (placeholderProducts.isEmpty()) {
+            log.debug("[DataInitializer] placeholder 이미지 없음 - 업데이트 불필요");
+            return;
+        }
+
+        log.info("[DataInitializer] placeholder 이미지 {}개 업데이트 시작", placeholderProducts.size());
+
+        for (Product product : placeholderProducts) {
+            String imageUrl = naverShoppingClient.fetchThumbnail(product.getName());
+            naverApiDelay(); // 초당 10건 제한 방지
+            if (imageUrl != null && !imageUrl.isBlank()) {
+                product.setImageUrl(imageUrl);
+                productRepository.save(product);
+                log.debug("[DataInitializer] 이미지 업데이트: {}", product.getName());
+            }
+        }
+
+        log.info("[DataInitializer] placeholder 이미지 업데이트 완료");
+    }
+
     /** 네이버 쇼핑 API로 썸네일을 가져와 상품 생성. API 키 미설정 시 빈 문자열 저장. */
     private Product product(String name, Long price, Category category, double avgRti, double avgRating) {
         return product(name, price, category, avgRti, avgRating, List.of());
@@ -202,6 +238,7 @@ public class DataInitializer implements CommandLineRunner {
     private Product product(String name, Long price, Category category, double avgRti, double avgRating,
                             List<PlatformLink> platformLinks) {
         String imageUrl = naverShoppingClient.fetchThumbnail(name);
+        naverApiDelay(); // 초당 10건 제한 방지
         return Product.builder()
                 .name(name)
                 .imageUrl(imageUrl)
@@ -212,6 +249,16 @@ public class DataInitializer implements CommandLineRunner {
                 .avgRating(avgRating)
                 .platformLinks(new ArrayList<>(platformLinks))
                 .build();
+    }
+
+    /** 네이버 API 초당 10건 제한 방지용 딜레이 (150ms) */
+    private void naverApiDelay() {
+        if (!naverShoppingClient.isConfigured()) return;
+        try {
+            Thread.sleep(150);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private PlatformLink link(String platform, long price, String url) {
