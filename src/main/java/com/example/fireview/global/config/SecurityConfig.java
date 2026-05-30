@@ -56,6 +56,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/products/**").permitAll()
                         // 홈 대시보드 - 비회원은 개인화 없는 공개 버전 반환
                         .requestMatchers("/api/dashboard/**").permitAll()
+                        // 네이버 쇼핑 검색 - 비회원도 검색 가능
+                        .requestMatchers("/api/search/**").permitAll()
                         .requestMatchers("/api/keywords/**").permitAll()
                         .requestMatchers("/api/analysis/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
