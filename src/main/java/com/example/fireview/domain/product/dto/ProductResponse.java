@@ -1,5 +1,6 @@
 package com.example.fireview.domain.product.dto;
 
+import com.example.fireview.domain.product.client.NaverShoppingItem;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.TrustGrade;
@@ -33,6 +34,43 @@ public record ProductResponse(
         Long lowestPrice,                  // 최저가 (원)
         String lowestPlatform              // 최저가 플랫폼 이름
 ) {
+    /**
+     * 네이버 쇼핑 검색 결과 아이템 → ProductResponse 변환.
+     * RTI 데이터가 없으므로 기본값(50.0 / SUSPICIOUS)으로 채운다.
+     */
+    public static ProductResponse fromNaverItem(NaverShoppingItem item) {
+        // 네이버 title에는 <b>태그가 포함되므로 제거
+        String name = item.title().replaceAll("<[^>]*>", "").trim();
+
+        long price = 0L;
+        try { price = Long.parseLong(item.lprice()); } catch (NumberFormatException ignored) {}
+
+        long productId = 0L;
+        try { productId = Long.parseLong(item.productId()); } catch (NumberFormatException ignored) {}
+
+        Category category = CategoryMapper.fromNaver(item.category1());
+        TrustGrade grade = TrustGrade.SUSPICIOUS; // 아직 RTI 분석 전
+
+        return new ProductResponse(
+                productId,
+                name,
+                item.image(),
+                price,
+                category,
+                category.getDisplayName(),
+                item.mallName().isBlank() ? "NAVER" : item.mallName(),
+                50.0,               // RTI 미분석 기본값
+                grade,
+                grade.toLevel(),
+                grade.getColor(),
+                0,                  // 리뷰 수 미집계
+                0.0,                // 평점 미집계
+                List.of(),
+                price,
+                item.mallName().isBlank() ? "NAVER" : item.mallName()
+        );
+    }
+
     public static ProductResponse from(Product product) {
         TrustGrade grade = TrustGrade.fromScore(product.getAvgRti());
         List<PlatformLinkDto> platformDtos = product.getPlatformLinks().stream()
