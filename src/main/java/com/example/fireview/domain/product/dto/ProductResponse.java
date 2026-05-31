@@ -32,7 +32,8 @@ public record ProductResponse(
         Double avgRating,
         List<PlatformLinkDto> platforms,   // 멀티 플랫폼 구매 링크
         Long lowestPrice,                  // 최저가 (원)
-        String lowestPlatform              // 최저가 플랫폼 이름
+        String lowestPlatform,             // 최저가 플랫폼 이름
+        String productUrl                  // 네이버 상품 페이지 URL (AI 분석 요청 시 사용)
 ) {
     /**
      * 네이버 쇼핑 검색 결과 아이템 → ProductResponse 변환.
@@ -67,7 +68,8 @@ public record ProductResponse(
                 0.0,                // 평점 미집계
                 List.of(),
                 price,
-                item.mallName().isBlank() ? "NAVER" : item.mallName()
+                item.mallName().isBlank() ? "NAVER" : item.mallName(),
+                item.link()         // AI 분석 요청 시 productUrl로 사용
         );
     }
 
@@ -92,7 +94,8 @@ public record ProductResponse(
                 product.getAvgRating(),
                 platformDtos,
                 product.getLowestPrice(),
-                product.getLowestPlatform()
+                product.getLowestPlatform(),
+                null    // DB 상품은 platformLinks에 URL이 있으므로 별도 productUrl 불필요
         );
     }
 }
