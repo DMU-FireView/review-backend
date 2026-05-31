@@ -110,20 +110,16 @@ public class AiAnalysisService {
     }
 
     /**
-     * AI 요약 결과로 상품 평균 RTI 업데이트
+     * AI 요약 결과로 상품 평균 RTI 업데이트.
+     * productId는 네이버 쇼핑 API의 외부 ID이므로 naverProductId 컬럼으로 조회한다.
      */
     private void updateProductAvgRti(String productId, AiProductSummary summary) {
-        try {
-            Long internalProductId = Long.parseLong(productId);
-            productRepository.findById(internalProductId).ifPresent(product -> {
-                product.updateAvgRti(summary.averageRti());
-                product.updateReviewCount(summary.reviewCount());
-                productRepository.save(product);
-                log.info("[AI Analysis] 상품 avgRti 업데이트: productId={}, avgRti={}, reviewCount={}",
-                        productId, summary.averageRti(), summary.reviewCount());
-            });
-        } catch (NumberFormatException e) {
-            log.debug("[AI Analysis] 내부 productId 파싱 불가: {}", productId);
-        }
+        productRepository.findByNaverProductId(productId).ifPresentOrElse(product -> {
+            product.updateAvgRti(summary.averageRti());
+            product.updateReviewCount(summary.reviewCount());
+            productRepository.save(product);
+            log.info("[AI Analysis] 상품 avgRti 업데이트: naverProductId={}, avgRti={}, reviewCount={}",
+                    productId, summary.averageRti(), summary.reviewCount());
+        }, () -> log.debug("[AI Analysis] DB에서 상품을 찾을 수 없음 (naverProductId={})", productId));
     }
 }
