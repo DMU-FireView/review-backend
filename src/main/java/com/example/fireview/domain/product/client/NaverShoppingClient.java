@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -52,9 +53,10 @@ public class NaverShoppingClient {
 
     /**
      * 키워드로 네이버 쇼핑 상품 목록 검색.
+     * display > 100 이면 자동으로 페이징하여 최대 1000건까지 수집한다.
      *
      * @param keyword 검색어
-     * @param display 가져올 결과 수 (최대 100)
+     * @param display 가져올 결과 수 (네이버 API 한도: 회당 100, 누적 최대 1000)
      * @return 네이버 쇼핑 아이템 목록. API 키 미설정 또는 오류 시 빈 리스트.
      */
     public List<NaverShoppingItem> searchProducts(String keyword, int display) {
@@ -63,10 +65,31 @@ public class NaverShoppingClient {
             return Collections.emptyList();
         }
 
+        int target = Math.min(display, 1000); // 네이버 API 최대 누적 1000건
+        List<NaverShoppingItem> result = new ArrayList<>();
+        int start = 1;
+
+        while (result.size() < target && start <= 1000) {
+            int pageSize = Math.min(100, target - result.size()); // 회당 최대 100
+            List<NaverShoppingItem> page = fetchPage(keyword, pageSize, start);
+            if (page.isEmpty()) break;
+            result.addAll(page);
+            start += page.size();
+        }
+
+        log.debug("[NaverShopping] 검색 완료: keyword={}, 수집={}건", keyword, result.size());
+        return result;
+    }
+
+    /**
+     * 단일 페이지 요청.
+     */
+    private List<NaverShoppingItem> fetchPage(String keyword, int display, int start) {
         try {
             String url = UriComponentsBuilder.fromHttpUrl(SEARCH_URL)
                     .queryParam("query", keyword)
-                    .queryParam("display", Math.min(display, 100))
+                    .queryParam("display", display)
+                    .queryParam("start", start)
                     .queryParam("sort", "sim")   // 정확도순
                     .build().toUriString();
 
@@ -86,7 +109,7 @@ public class NaverShoppingClient {
                     .toList();
 
         } catch (Exception e) {
-            log.warn("[NaverShopping] 검색 실패 ({}): {}", keyword, e.getMessage());
+            log.warn("[NaverShopping] 페이지 요청 실패 (keyword={}, start={}): {}", keyword, start, e.getMessage());
             return Collections.emptyList();
         }
     }
