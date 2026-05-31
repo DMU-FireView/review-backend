@@ -56,6 +56,15 @@ public class Report {
     @Column(length = 500)
     private String adminComment;
 
+    /** 첨부 자료 URL (스크린샷 등, optional) */
+    @Column(length = 1000)
+    private String attachmentUrl;
+
+    /** AI 분석 근거 함께 제출 여부 */
+    @Builder.Default
+    @Column(nullable = false)
+    private boolean includeAiEvidence = false;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
