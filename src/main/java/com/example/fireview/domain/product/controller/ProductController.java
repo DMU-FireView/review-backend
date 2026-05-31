@@ -1,11 +1,14 @@
 package com.example.fireview.domain.product.controller;
 
 import com.example.fireview.domain.dashboard.service.DashboardService;
+import com.example.fireview.domain.product.cache.NaverProductCache;
 import com.example.fireview.domain.product.dto.ProductResponse;
 import com.example.fireview.domain.product.service.ProductService;
 import com.example.fireview.domain.review.dto.ReviewResponse;
 import com.example.fireview.domain.review.service.ReviewService;
 import com.example.fireview.domain.search.service.NaverSearchService;
+import com.example.fireview.global.exception.CustomException;
+import com.example.fireview.global.exception.ErrorCode;
 import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,6 +26,7 @@ public class ProductController {
     private final ReviewService reviewService;
     private final DashboardService dashboardService;
     private final NaverSearchService naverSearchService;
+    private final NaverProductCache naverProductCache;
 
     @GetMapping
     public ApiResponse<List<ProductResponse>> getProducts(
@@ -38,10 +42,21 @@ public class ProductController {
     public ApiResponse<ProductResponse> getProduct(
             @PathVariable Long id,
             @AuthenticationPrincipal Jwt jwt) {
-        if (jwt != null) {
-            dashboardService.recordView(jwt.getSubject(), id);
+        // DB에서 조회 시도
+        try {
+            if (jwt != null) {
+                dashboardService.recordView(jwt.getSubject(), id);
+            }
+            return ApiResponse.success(productService.getProduct(id));
+        } catch (CustomException e) {
+            if (e.getErrorCode() == ErrorCode.PRODUCT_NOT_FOUND) {
+                // DB에 없으면 네이버 검색 캐시에서 fallback (네이버 API 상품 ID)
+                return naverProductCache.get(id)
+                        .map(ApiResponse::success)
+                        .orElseThrow(() -> e);
+            }
+            throw e;
         }
-        return ApiResponse.success(productService.getProduct(id));
     }
 
     @GetMapping("/{productId}/reviews")
