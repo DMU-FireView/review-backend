@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         // OAuth2 로그인 진입 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
+                        // 찜 여부 확인은 비로그인도 접근 허용 (컨트롤러에서 401 포맷 반환)
+                        .requestMatchers("/api/wishlist/*/check").permitAll()
                         // ── 인증 필요 ─────────────────────────────────────────────────
                         .requestMatchers("/api/reviews/*/feedback").authenticated()
                         .requestMatchers("/api/wishlist/**").authenticated()
