@@ -2,6 +2,7 @@ package com.example.fireview.global.config;
 
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
+import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,15 +27,18 @@ public class SecurityConfig {
     private final JwtDecoder jwtDecoder;
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final List<String> allowedOriginPatterns;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
+                          CustomAuthenticationEntryPoint authenticationEntryPoint,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
+        this.authenticationEntryPoint = authenticationEntryPoint;
         this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
@@ -64,13 +68,14 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         // OAuth2 로그인 진입 경로 허용
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
-                        // 찜 여부 확인은 비로그인도 접근 허용 (컨트롤러에서 401 포맷 반환)
-                        .requestMatchers("/api/wishlist/*/check").permitAll()
                         // ── 인증 필요 ─────────────────────────────────────────────────
                         .requestMatchers("/api/reviews/*/feedback").authenticated()
                         .requestMatchers("/api/wishlist/**").authenticated()
                         .requestMatchers("/api/cart/**").authenticated()
                         .anyRequest().authenticated())
+                // 비로그인 시 우리 API 포맷으로 401 반환
+                .exceptionHandling(ex ->
+                        ex.authenticationEntryPoint(authenticationEntryPoint))
                 // JWT 기반 API 인증
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)))
