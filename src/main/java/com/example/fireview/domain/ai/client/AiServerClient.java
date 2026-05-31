@@ -6,8 +6,8 @@ import com.example.fireview.domain.ai.dto.response.AiProductListResponse;
 import com.example.fireview.domain.ai.dto.response.AiProductRiskReportResponse;
 import com.example.fireview.domain.ai.dto.response.AiReviewReportResponse;
 import com.example.fireview.domain.ai.dto.response.AiRtiTrendResponse;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -25,10 +25,13 @@ import org.springframework.web.client.RestTemplate;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class AiServerClient {
 
     private final RestTemplate restTemplate;
+
+    public AiServerClient(@Qualifier("aiRestTemplate") RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
 
     @Value("${ai.server.base-url}")
     private String baseUrl;

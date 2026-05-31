@@ -14,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * AI 분석 서비스
  *
@@ -49,9 +51,19 @@ public class AiAnalysisService {
 
         AiAnalyzeRequest request = AiAnalyzeRequest.of(productId, productUrl);
 
-        AiProductListResponse listResponse = safeCall(() -> aiServerClient.analyzeProductList(request), "product-list");
-        AiProductDetailResponse detailResponse = safeCall(() -> aiServerClient.analyzeProductDetail(request), "product-detail");
-        AiRtiTrendResponse trendResponse = safeCall(() -> aiServerClient.analyzeRtiTrend(request), "rti-trend");
+        // AI 서버 3개 API 병렬 호출 (순차 호출 대비 응답시간 ~3배 단축)
+        CompletableFuture<AiProductListResponse> listFuture =
+                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeProductList(request), "product-list"));
+        CompletableFuture<AiProductDetailResponse> detailFuture =
+                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeProductDetail(request), "product-detail"));
+        CompletableFuture<AiRtiTrendResponse> trendFuture =
+                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeRtiTrend(request), "rti-trend"));
+
+        CompletableFuture.allOf(listFuture, detailFuture, trendFuture).join();
+
+        AiProductListResponse listResponse = listFuture.join();
+        AiProductDetailResponse detailResponse = detailFuture.join();
+        AiRtiTrendResponse trendResponse = trendFuture.join();
 
         // AI 분석 결과로 DB 동기화
         if (detailResponse != null && detailResponse.results() != null) {
