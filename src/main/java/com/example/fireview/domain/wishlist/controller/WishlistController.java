@@ -2,8 +2,6 @@ package com.example.fireview.domain.wishlist.controller;
 
 import com.example.fireview.domain.wishlist.dto.WishlistResponse;
 import com.example.fireview.domain.wishlist.service.WishlistService;
-import com.example.fireview.global.exception.CustomException;
-import com.example.fireview.global.exception.ErrorCode;
 import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -64,9 +62,6 @@ public class WishlistController {
     public ApiResponse<Map<String, Boolean>> checkWishlist(
             @PathVariable Long productId,
             @AuthenticationPrincipal Jwt jwt) {
-        if (jwt == null) {
-            throw new CustomException(ErrorCode.UNAUTHORIZED);
-        }
         boolean isWishlisted = wishlistService.isWishlisted(jwt.getSubject(), productId);
         return ApiResponse.success(Map.of("wishlisted", isWishlisted));
     }
