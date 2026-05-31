@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -52,8 +53,8 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     public void run(String... args) {
         if (productRepository.count() > 0) {
-            // 이미 데이터가 있으면 placeholder 이미지만 업데이트
             updatePlaceholderImages();
+            updateFakePlatformLinks();
             return;
         }
         log.info("샘플 데이터 초기화 시작...");
@@ -197,15 +198,94 @@ public class DataInitializer implements CommandLineRunner {
         log.info("[DataInitializer] placeholder 이미지 업데이트 완료");
     }
 
-    /** 네이버 쇼핑 API로 썸네일을 가져와 상품 생성. API 키 미설정 시 빈 문자열 저장. */
+    /**
+     * 기존 RDS 데이터의 가짜 platform URL을 실제 검색 URL로 교체.
+     * fake URL 패턴: smartstore.naver.com/samsung, coupang.com/vp/products 등
+     * @Transactional 필수 - platformLinks가 LAZY 로딩이라 세션 필요
+     */
+    @Transactional
+    public void updateFakePlatformLinks() {
+        List<Product> products = productRepository.findAll();
+        boolean updated = false;
+
+        for (Product product : products) {
+            boolean changed = false;
+            for (var link : product.getPlatformLinks()) {
+                String url = link.getUrl();
+                if (url == null || isFakeUrl(url)) {
+                    String realUrl = getNaverLinkOrSearch(product.getName(), link.getPlatform());
+                    link.setUrl(realUrl);
+                    changed = true;
+                }
+            }
+            if (changed) {
+                productRepository.save(product);
+                updated = true;
+            }
+        }
+
+        if (updated) {
+            log.info("[DataInitializer] 가짜 platform URL 업데이트 완료");
+        }
+    }
+
+    private boolean isFakeUrl(String url) {
+        // DataInitializer에서 하드코딩됐던 가짜 URL 패턴 감지
+        return url.contains("smartstore.naver.com/samsung")
+                || url.contains("smartstore.naver.com/lg")
+                || url.contains("smartstore.naver.com/apple")
+                || url.contains("smartstore.naver.com/sony")
+                || url.contains("smartstore.naver.com/nike")
+                || url.contains("smartstore.naver.com/newbalance")
+                || url.contains("coupang.com/vp/products/")
+                || url.contains("11st.co.kr/products/")
+                || url.contains("gmarket.co.kr/")
+                || url.contains("ssg.com/");
+    }
+
+    private String getNaverLinkOrSearch(String productName, String platform) {
+        if ("NAVER".equals(platform) && naverShoppingClient.isConfigured()) {
+            var item = naverShoppingClient.fetchItem(productName);
+            naverApiDelay();
+            if (item != null && item.link() != null && !item.link().isBlank()) {
+                return item.link();
+            }
+        }
+        return searchUrl(platform, productName);
+    }
+
+    /**
+     * 네이버 쇼핑 API로 썸네일 + 실제 링크를 가져와 상품 생성.
+     * platformLinks 미지정 시 네이버/쿠팡/11ST 검색 URL 자동 생성.
+     */
     private Product product(String name, Long price, Category category, double avgRti, double avgRating) {
-        return product(name, price, category, avgRti, avgRating, List.of());
+        return product(name, price, category, avgRti, avgRating, null);
     }
 
     private Product product(String name, Long price, Category category, double avgRti, double avgRating,
                             List<PlatformLink> platformLinks) {
-        String imageUrl = naverShoppingClient.fetchThumbnail(name);
-        naverApiDelay(); // 초당 10건 제한 방지
+        // 네이버 API로 실제 이미지 + 링크 조회
+        String imageUrl = "";
+        String naverLink = searchUrl("NAVER", name);
+
+        if (naverShoppingClient.isConfigured()) {
+            var item = naverShoppingClient.fetchItem(name);
+            naverApiDelay();
+            if (item != null) {
+                imageUrl = item.image() != null ? item.image() : "";
+                naverLink = item.link() != null && !item.link().isBlank()
+                        ? item.link() : naverLink;
+            }
+        }
+
+        // platformLinks 미지정 시 검색 URL 자동 생성
+        List<PlatformLink> links = (platformLinks != null) ? new ArrayList<>(platformLinks)
+                : new ArrayList<>(List.of(
+                    link("NAVER",   price, naverLink),
+                    link("COUPANG", price, searchUrl("COUPANG", name)),
+                    link("11ST",    price, searchUrl("11ST",    name))
+                ));
+
         return Product.builder()
                 .name(name)
                 .imageUrl(imageUrl)
@@ -214,8 +294,27 @@ public class DataInitializer implements CommandLineRunner {
                 .avgRti(avgRti)
                 .reviewCount(0)
                 .avgRating(avgRating)
-                .platformLinks(new ArrayList<>(platformLinks))
+                .platformLinks(links)
                 .build();
+    }
+
+    /**
+     * 플랫폼별 상품명 검색 URL 생성
+     */
+    private String searchUrl(String platform, String productName) {
+        try {
+            String encoded = java.net.URLEncoder.encode(productName, java.nio.charset.StandardCharsets.UTF_8);
+            return switch (platform) {
+                case "NAVER"   -> "https://search.shopping.naver.com/search/all?query=" + encoded;
+                case "COUPANG" -> "https://www.coupang.com/np/search?q=" + encoded;
+                case "11ST"    -> "https://search.11st.co.kr/Search.tmall?kwd=" + encoded;
+                case "GMARKET" -> "https://browse.gmarket.co.kr/search?keyword=" + encoded;
+                case "SSG"     -> "https://www.ssg.com/search/searchBar.ssg?query=" + encoded;
+                default        -> "https://search.shopping.naver.com/search/all?query=" + encoded;
+            };
+        } catch (Exception e) {
+            return "https://search.shopping.naver.com/search/all?query=" + productName;
+        }
     }
 
     /** 네이버 API 초당 10건 제한 방지용 딜레이 (150ms) */
