@@ -90,7 +90,7 @@ public class AiAnalysisService {
 
         log.info("[AI Analysis] 분석 완료: productId={}", productId);
 
-        return ProductAnalysisResponse.of(productId, listResponse, detailResponse, trendResponse);
+        return ProductAnalysisResponse.of(productId, listResponse, detailResponse, trendResponse, riskReport);
     }
 
     /**
