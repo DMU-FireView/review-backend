@@ -11,6 +11,7 @@ import java.util.List;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
     List<Review> findByProduct(Product product);
+    boolean existsByProduct_IdAndReviewerIdAndWrittenAt(Long productId, String reviewerId, java.time.LocalDateTime writtenAt);
     List<Review> findByProduct_IdOrderByRtiScoreDesc(Long productId);
     List<Review> findByProduct_IdAndTrustGrade(Long productId, TrustGrade grade);
     List<Review> findByProduct_IdAndRtiScoreGreaterThanEqual(Long productId, double minScore);
