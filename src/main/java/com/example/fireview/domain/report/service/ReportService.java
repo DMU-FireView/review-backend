@@ -49,6 +49,8 @@ public class ReportService {
                 .review(review)
                 .reason(request.reason())
                 .detail(request.detail())
+                .attachmentUrl(request.attachmentUrl())
+                .includeAiEvidence(request.includeAiEvidence())
                 .build();
 
         Report saved = reportRepository.save(report);
