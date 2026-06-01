@@ -2,6 +2,7 @@ package com.example.fireview.domain.product.dto;
 
 import com.example.fireview.domain.product.client.NaverShoppingItem;
 import com.example.fireview.domain.product.entity.Category;
+import com.example.fireview.domain.product.entity.MajorCategory;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.TrustGrade;
 
@@ -15,14 +16,20 @@ import java.util.List;
  * - rtiLevel: AI 서버와 동일한 "safe" | "warn" | "danger" 형식
  * - platforms: 멀티 플랫폼 구매 링크 + 가격 (교수님 반응 좋았던 기능)
  * - lowestPrice / lowestPlatform: 최저가 정보
+ * - majorCategory / majorCategoryDisplayName: 대분류
+ * - categoryDisplayName: 중분류 표시명
+ * - subCategory: 소분류 (Naver category3, 예: "스마트폰")
  */
 public record ProductResponse(
         Long id,
         String name,
         String imageUrl,
         Long price,
-        Category category,
-        String categoryDisplayName,
+        MajorCategory majorCategory,           // 대분류
+        String majorCategoryDisplayName,       // 대분류 표시명
+        Category category,                     // 중분류
+        String categoryDisplayName,            // 중분류 표시명
+        String subCategory,                    // 소분류 (Naver category3)
         String platform,
         Double avgRti,               // RTI 수치 (상품 단위에서만 노출)
         TrustGrade rtiGrade,         // SAFE | SUSPICIOUS | DANGER
@@ -49,7 +56,7 @@ public record ProductResponse(
         long productId = 0L;
         try { productId = Long.parseLong(item.productId()); } catch (NumberFormatException ignored) {}
 
-        Category category = CategoryMapper.fromNaver(item.category1());
+        Category category = CategoryMapper.fromNaver(item.category1(), item.category2());
         TrustGrade grade = TrustGrade.SUSPICIOUS; // 아직 RTI 분석 전
 
         return new ProductResponse(
@@ -57,19 +64,22 @@ public record ProductResponse(
                 name,
                 item.image(),
                 price,
+                category.getMajor(),
+                category.getMajor().getDisplayName(),
                 category,
                 category.getDisplayName(),
+                item.category3(),               // 소분류
                 item.mallName().isBlank() ? "NAVER" : item.mallName(),
-                50.0,               // RTI 미분석 기본값
+                50.0,                           // RTI 미분석 기본값
                 grade,
                 grade.toLevel(),
                 grade.getColor(),
-                0,                  // 리뷰 수 미집계
-                0.0,                // 평점 미집계
+                0,                              // 리뷰 수 미집계
+                0.0,                            // 평점 미집계
                 List.of(),
                 price,
                 item.mallName().isBlank() ? "NAVER" : item.mallName(),
-                item.link()         // AI 분석 요청 시 productUrl로 사용
+                item.link()                     // AI 분석 요청 시 productUrl로 사용
         );
     }
 
@@ -78,13 +88,17 @@ public record ProductResponse(
         List<PlatformLinkDto> platformDtos = product.getPlatformLinks().stream()
                 .map(PlatformLinkDto::from)
                 .toList();
+        Category category = product.getCategory();
         return new ProductResponse(
                 product.getId(),
                 product.getName(),
                 product.getImageUrl(),
                 product.getPrice(),
-                product.getCategory(),
-                product.getCategory().getDisplayName(),
+                category.getMajor(),
+                category.getMajor().getDisplayName(),
+                category,
+                category.getDisplayName(),
+                product.getSubCategory(),
                 product.getPlatform(),
                 product.getAvgRti(),
                 grade,
