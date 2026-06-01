@@ -128,7 +128,7 @@ public class AiAnalysisService {
 
         for (SampleReview sr : sampleReviews) {
             try {
-                Long reviewId = Long.parseLong(sr.review_id());
+                Long reviewId = Long.parseLong(sr.reviewId());
                 if (reviewRepository.existsById(reviewId)) {
                     reviewRepository.findById(reviewId).ifPresent(r -> {
                         r.updateRtiScore(0); // level로 재계산
