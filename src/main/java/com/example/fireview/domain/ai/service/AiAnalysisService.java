@@ -163,6 +163,7 @@ public class AiAnalysisService {
                         .reasons(reasonMessages)
                         .writtenAt(writtenAt)
                         .isVerifiedPurchase(false)
+                        .createdAt(LocalDateTime.now()) // @PrePersist가 merge()에서 실행 안 되므로 명시적 설정
                         .build();
                 reviewRepository.save(review);
                 log.info("[AI Analysis] 리뷰 저장: reviewId={}, product={}", reviewId, naverProductId);
