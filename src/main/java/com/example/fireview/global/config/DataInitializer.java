@@ -303,7 +303,13 @@ public class DataInitializer implements CommandLineRunner {
                     link("11ST",    price, searchUrl("11ST",    name))
                 ));
 
+        Long productId = null;
+        if (naverProductId != null) {
+            try { productId = Long.parseLong(naverProductId); } catch (NumberFormatException ignored) {}
+        }
+
         return Product.builder()
+                .id(productId)
                 .name(name)
                 .imageUrl(imageUrl)
                 .price(price)

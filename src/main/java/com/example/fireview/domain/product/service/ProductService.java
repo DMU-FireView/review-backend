@@ -74,7 +74,10 @@ public class ProductService {
 
     private ProductResponse doSaveFromCache(ProductResponse cached) {
         Category category = cached.category() != null ? cached.category() : Category.ETC;
+        // naverProductId를 DB PK로 직접 사용
+        Long productId = cached.id() != null ? cached.id() : Long.parseLong(cached.naverProductId());
         Product product = Product.builder()
+                .id(productId)
                 .name(cached.name())
                 .imageUrl(cached.imageUrl())
                 .price(cached.price())
