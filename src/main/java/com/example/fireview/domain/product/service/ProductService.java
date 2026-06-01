@@ -23,8 +23,10 @@ public class ProductService {
     private final ProductRepository productRepository;
 
     public Product findById(Long id) {
+        // DB PK로 먼저 조회, 없으면 naverProductId로 fallback 조회
         return productRepository.findById(id)
-                .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND));
+                .orElseGet(() -> productRepository.findByNaverProductId(String.valueOf(id))
+                        .orElseThrow(() -> new CustomException(ErrorCode.PRODUCT_NOT_FOUND)));
     }
 
     public ProductResponse getProduct(Long id) {
