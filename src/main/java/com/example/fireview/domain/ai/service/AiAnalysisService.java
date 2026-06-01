@@ -128,15 +128,6 @@ public class AiAnalysisService {
 
         for (SampleReview sr : sampleReviews) {
             try {
-                Long reviewId = Long.parseLong(sr.reviewId());
-                if (reviewRepository.existsById(reviewId)) {
-                    reviewRepository.findById(reviewId).ifPresent(r -> {
-                        r.updateRtiScore(0); // level로 재계산
-                        reviewRepository.save(r);
-                    });
-                    continue;
-                }
-
                 LocalDateTime writtenAt;
                 try {
                     writtenAt = java.time.LocalDate.parse(sr.date(), formatter).atStartOfDay();
@@ -144,18 +135,24 @@ public class AiAnalysisService {
                     writtenAt = LocalDateTime.now();
                 }
 
+                String reviewerId = sr.author() != null ? sr.author() : "unknown";
+                if (reviewRepository.existsByProduct_IdAndReviewerIdAndWrittenAt(finalProduct.getId(), reviewerId, writtenAt)) {
+                    continue;
+                }
+
                 List<String> reasonMessages = sr.reasons() != null
                         ? sr.reasons().stream().map(r -> r.message()).filter(m -> m != null && !m.isBlank()).toList()
                         : List.of();
 
-                int rti = switch (sr.level()) { case "safe" -> 85; case "danger" -> 30; default -> 55; };
+                int rti = switch (sr.level() != null ? sr.level() : "warn") {
+                    case "safe" -> 85; case "danger" -> 30; default -> 55;
+                };
                 TrustGrade grade = TrustGrade.fromRti(rti);
 
                 Review review = Review.builder()
-                        .id(reviewId)
                         .product(finalProduct)
                         .reviewerNickname(sr.author() != null ? sr.author() : "익명")
-                        .reviewerId(sr.author() != null ? sr.author() : "unknown")
+                        .reviewerId(reviewerId)
                         .content(sr.content() != null ? sr.content() : "")
                         .rating(sr.rating() != null ? sr.rating() : 0)
                         .rtiScore((double) rti)
@@ -163,10 +160,9 @@ public class AiAnalysisService {
                         .reasons(reasonMessages)
                         .writtenAt(writtenAt)
                         .isVerifiedPurchase(false)
-                        .createdAt(LocalDateTime.now()) // @PrePersist가 merge()에서 실행 안 되므로 명시적 설정
                         .build();
                 reviewRepository.save(review);
-                log.info("[AI Analysis] 리뷰 저장: reviewId={}, product={}", reviewId, naverProductId);
+                log.info("[AI Analysis] 리뷰 저장: reviewer={}, product={}", reviewerId, naverProductId);
             } catch (Exception e) {
                 log.warn("[AI Analysis] 리뷰 저장 실패: {}", e.getMessage());
             }
