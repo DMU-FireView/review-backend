@@ -32,7 +32,8 @@ public record ProductAnalysisResponse(
             String productId,
             AiProductListResponse listResponse,
             AiProductDetailResponse detailResponse,
-            AiRtiTrendResponse trendResponse
+            AiRtiTrendResponse trendResponse,
+            AiProductRiskReportResponse riskReport
     ) {
         AiProductSummary summary = (listResponse != null
                 && listResponse.products() != null
@@ -40,20 +41,29 @@ public record ProductAnalysisResponse(
                 ? listResponse.products().get(0)
                 : null;
 
-        // 개별 리뷰: AI 내부 필드 제거 후 정제
-        List<ReviewAnalysisDto> reviewDtos = (detailResponse != null
-                && detailResponse.results() != null)
-                ? detailResponse.results().stream()
-                        .map(ReviewAnalysisDto::from)
-                        .toList()
-                : List.of();
+        // risk-report sample_reviews와 product-detail 결과를 review_id 기준으로 병합
+        // → content, author, date + rti, signals 모두 포함
+        List<ReviewAnalysisDto> reviewDtos;
+        if (riskReport != null && riskReport.sampleReviews() != null && !riskReport.sampleReviews().isEmpty()) {
+            java.util.Map<String, AiAnalysisResult> detailMap = (detailResponse != null && detailResponse.results() != null)
+                    ? detailResponse.results().stream()
+                            .collect(java.util.stream.Collectors.toMap(AiAnalysisResult::reviewId, r -> r, (a, b) -> a))
+                    : java.util.Map.of();
 
-        // 추이 데이터: 프론트 친화적 DTO로 변환
-        List<TrendEntryDto> trendDtos = (trendResponse != null
-                && trendResponse.trend() != null)
-                ? trendResponse.trend().stream()
-                        .map(TrendEntryDto::from)
-                        .toList()
+            reviewDtos = riskReport.sampleReviews().stream()
+                    .map(sample -> ReviewAnalysisDto.from(sample, detailMap.get(sample.review_id())))
+                    .toList();
+        } else if (detailResponse != null && detailResponse.results() != null) {
+            reviewDtos = detailResponse.results().stream()
+                    .map(ReviewAnalysisDto::from)
+                    .toList();
+        } else {
+            reviewDtos = List.of();
+        }
+
+        // 추이 데이터
+        List<TrendEntryDto> trendDtos = (trendResponse != null && trendResponse.trend() != null)
+                ? trendResponse.trend().stream().map(TrendEntryDto::from).toList()
                 : List.of();
 
         return new ProductAnalysisResponse(
