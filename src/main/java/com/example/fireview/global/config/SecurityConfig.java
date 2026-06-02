@@ -83,7 +83,13 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
-                        .successHandler(oAuth2SuccessHandler));
+                        .successHandler(oAuth2SuccessHandler)
+                        .failureHandler((request, response, exception) -> {
+                            // OAuth2 로그인 실패 시 원인을 로그에 남기고 프론트엔드로 리다이렉트
+                            org.slf4j.LoggerFactory.getLogger(SecurityConfig.class)
+                                    .error("[OAuth2] 로그인 실패 - {}: {}", exception.getClass().getSimpleName(), exception.getMessage());
+                            response.sendRedirect("https://www.beens.kr/login?error");
+                        }));
 
         return http.build();
     }
