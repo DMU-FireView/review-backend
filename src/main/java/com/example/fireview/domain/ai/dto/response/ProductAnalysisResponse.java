@@ -90,19 +90,15 @@ public record ProductAnalysisResponse(
         if (detailResponse != null && detailResponse.results() != null && !detailResponse.results().isEmpty()) {
             int total = detailResponse.results().size();
 
-            // 광고성 의심 비율
             long adCount = detailResponse.results().stream()
                     .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> adCodes.contains(reason.code())))
                     .count();
-            // 반복 표현 비율
             long repCount = detailResponse.results().stream()
                     .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> "REPETITIVE_KEYWORD".equals(reason.code())))
                     .count();
-            // 구매인증 비율 (input_features.verified_purchase == "True")
             long verifiedCount = detailResponse.results().stream()
                     .filter(r -> r.inputFeatures() != null && "True".equals(String.valueOf(r.inputFeatures().get("verified_purchase"))))
                     .count();
-            // 작성 시점 패턴 (MULTIPLE_REVIEWS_SAME_DAY 포함 리뷰 비율)
             long timingCount = detailResponse.results().stream()
                     .filter(r -> r.reasons() != null && r.reasons().stream().anyMatch(reason -> "MULTIPLE_REVIEWS_SAME_DAY".equals(reason.code())))
                     .count();
