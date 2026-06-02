@@ -41,6 +41,9 @@ import java.util.Random;
 @org.springframework.context.annotation.Profile("!test")
 public class DataInitializer implements CommandLineRunner {
 
+    private static final java.util.concurrent.atomic.AtomicLong FALLBACK_ID =
+            new java.util.concurrent.atomic.AtomicLong(900_000_000_000L);
+
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
@@ -307,6 +310,11 @@ public class DataInitializer implements CommandLineRunner {
         Long productId = null;
         if (naverProductId != null) {
             try { productId = Long.parseLong(naverProductId); } catch (NumberFormatException ignored) {}
+        }
+        // 네이버 API에서 productId를 못 가져온 경우 fallback ID 사용
+        if (productId == null) {
+            productId = FALLBACK_ID.getAndIncrement();
+            log.debug("[DataInitializer] naverProductId 없음, fallback ID 사용: name={}, id={}", name, productId);
         }
 
         return Product.builder()
