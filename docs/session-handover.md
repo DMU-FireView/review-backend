@@ -47,6 +47,24 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 
 ---
 
+## ✅ 이전 세션 완료 PR 목록
+
+| PR | 내용 |
+|----|------|
+| #57 | 검색 결과 부족 개선 (멀티페이지 + DB 병합) |
+| #58 | `/api/products?keyword` DB만 조회 문제 수정 |
+| #59~#62 | 검색 500 오류 (LazyInit → JOIN FETCH 근본 해결) |
+| #63~#64 | 비로그인 401 전역 포맷 통일 |
+| #65 | AI 서버 타임아웃 + 병렬 호출 (CompletableFuture) |
+| #66 | 네이버 상품에 productUrl 추가 |
+| #67 | naverProductId 매핑으로 AI 분석 결과 DB 업데이트 활성화 |
+| #68 | 대분류/중분류/소분류 3계층 카테고리 구조 도입 |
+| #70 | NaverProductCache 인메모리 → Redis 전환 (TTL 24시간) |
+| #71 | Docker 컨테이너 Redis 호스트 접근 문제 수정 (localhost → EC2 내부 IP) |
+| #72 | Redis 역직렬화 오류 수정 (String 기반 JSON 직렬화로 교체) |
+
+---
+
 ## ✅ 이번 세션(2026-06-02)에서 완료한 PR 목록
 
 | PR | 브랜치 | 내용 |
@@ -175,6 +193,44 @@ docker restart fireview
 
 ---
 
+## 📦 카테고리 구조
+
+3계층으로 구성됨.
+
+```
+대분류 (MajorCategory enum, 14개): 디지털/가전, 패션의류, 패션잡화, 뷰티, 식품 ...
+  └── 중분류 (Category enum, ~50개): DIGITAL_MOBILE, DIGITAL_PC, ACC_SHOES ...
+        └── 소분류 (subCategory String): Naver category3 값 그대로 저장
+```
+
+### DB 마이그레이션 주의사항
+- `products`, `user_preferred_categories` 두 테이블 모두 category 컬럼 보유
+- enum 값 변경 시 두 테이블 모두 마이그레이션 필요
+- 마이그레이션 전 constraint 제거 필요:
+```sql
+ALTER TABLE products DROP CONSTRAINT IF EXISTS products_category_check;
+ALTER TABLE user_preferred_categories DROP CONSTRAINT IF EXISTS user_preferred_categories_category_check;
+```
+
+---
+
+## 💾 Redis 캐시 구조
+
+| 항목 | 값 |
+|------|-----|
+| 호스트 | `172.31.44.47` (EC2 내부 IP, Docker 컨테이너에서 접근) |
+| 포트 | `6379` |
+| 키 패턴 | `naver:product:{naverProductId}` |
+| TTL | 24시간 |
+| 직렬화 | JSON String (ObjectMapper 직접 사용, GenericJackson2JsonRedisSerializer 사용 불가) |
+
+```bash
+# 캐시 전체 삭제 (역직렬화 오류 발생 시)
+redis6-cli keys "naver:product:*" | xargs redis6-cli del
+```
+
+---
+
 ## 📁 주요 파일 위치
 
 | 파일 | 역할 |
@@ -188,6 +244,15 @@ docker restart fireview
 | `domain/review/repository/ReviewRepository.java` | existsByProduct_IdAndReviewerIdAndWrittenAt 추가 |
 | `domain/product/entity/Product.java` | id = naverProductId (수동 할당, @GeneratedValue 없음) |
 | `global/config/DataInitializer.java` | 더미 데이터 초기화 (@Profile("!test"), fallback ID 적용) |
+| `global/config/RedisConfig.java` | Redis String 직렬화 설정 |
+| `global/config/RestTemplateConfig.java` | AI 전용 RestTemplate (30초 타임아웃) |
+| `global/security/CustomAuthenticationEntryPoint.java` | 전역 401 포맷 처리 |
+| `domain/product/cache/NaverProductCache.java` | 네이버 상품 Redis 캐시 (TTL 24h) |
+| `domain/product/entity/MajorCategory.java` | 대분류 enum (14개) |
+| `domain/product/entity/Category.java` | 중분류 enum (~50개, getMajor() 포함) |
+| `domain/product/dto/CategoryMapper.java` | Naver category1+2 → 내부 Category 변환 |
+| `domain/product/repository/ProductRepository.java` | JOIN FETCH 쿼리, findByNaverProductId 포함 |
+| `domain/search/service/NaverSearchService.java` | 검색 (DB + 네이버 멀티페이지 병합) |
 | `docs/frontend-integration-guide.md` | 프론트엔드 연동 수정 가이드 |
 
 ---
