@@ -1,6 +1,7 @@
 package com.example.fireview.global.config;
 
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
+import com.example.fireview.domain.auth.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
 import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,17 +29,20 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final List<String> allowedOriginPatterns;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
+                          HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
         this.authenticationEntryPoint = authenticationEntryPoint;
+        this.authorizationRequestRepository = authorizationRequestRepository;
         this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
@@ -47,9 +51,9 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // OAuth2 인가 코드 흐름 중 state 저장을 위해 세션 허용 (IF_REQUIRED)
+                // OAuth2 state를 쿠키 기반으로 저장하므로 세션 불필요 → STATELESS
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
@@ -81,6 +85,9 @@ public class SecurityConfig {
                         oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)))
                 // OAuth2 소셜 로그인
                 .oauth2Login(oauth2 -> oauth2
+                        // state를 세션 대신 쿠키(SameSite=None)에 저장 → cross-site 콜백에서도 유실 없음
+                        .authorizationEndpoint(auth ->
+                                auth.authorizationRequestRepository(authorizationRequestRepository))
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
