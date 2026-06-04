@@ -102,6 +102,17 @@ public class SecurityConfig {
                             String currentSessionId = existingSession != null ? existingSession.getId() : "(세션 없음)";
                             boolean sessionIdsMatch = existingSession != null && existingSession.getId().equals(sessionId);
 
+                            // 세션 속성 목록 (SPRING_SECURITY_OAUTH2_AUTHZ_REQUEST 있는지 확인)
+                            String sessionAttrs = "(세션 없음)";
+                            if (existingSession != null) {
+                                java.util.List<String> attrs = new java.util.ArrayList<>();
+                                java.util.Enumeration<String> names = existingSession.getAttributeNames();
+                                while (names.hasMoreElements()) attrs.add(names.nextElement());
+                                sessionAttrs = attrs.isEmpty() ? "(속성 없음)" : String.join(", ", attrs);
+                            }
+                            boolean hasOAuth2State = existingSession != null &&
+                                    existingSession.getAttribute("SPRING_SECURITY_OAUTH2_AUTHZ_REQUEST") != null;
+
                             response.setContentType("text/html; charset=UTF-8");
                             response.setStatus(200);
                             response.getWriter().write("""
@@ -119,11 +130,13 @@ public class SecurityConfig {
                                   <tr><td style="padding:8px;background:#333;">쿠키로 전달됨</td><td style="padding:8px;">%s</td></tr>
                                   <tr><td style="padding:8px;background:#333;">서버 현재 세션 ID</td><td style="padding:8px;">%s</td></tr>
                                   <tr><td style="padding:8px;background:#333;">세션 ID 일치</td><td style="padding:8px;color:%s;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">세션 속성 목록</td><td style="padding:8px;font-size:11px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">OAuth2 state 존재</td><td style="padding:8px;color:%s;">%s</td></tr>
                                   <tr><td style="padding:8px;background:#333;">요청 URL</td><td style="padding:8px;font-size:11px;">%s</td></tr>
                                 </table>
                                 <p style="color:#aaa;margin-top:16px;">
-                                  ✅ 세션 유효=true + 세션ID 일치=true 이면 SameSite 문제 해결됨<br>
-                                  ❌ 세션 유효=false 이면 SameSite=None이 아직 미적용
+                                  ✅ 세션유효=true + 세션ID일치=true + OAuth2 state 존재=true → 로그인 성공해야 함<br>
+                                  ❌ OAuth2 state 존재=false → state가 다른 세션에 저장됐거나 세션이 교체됨
                                 </p>
                                 </body></html>
                                 """.formatted(
@@ -137,6 +150,9 @@ public class SecurityConfig {
                                     currentSessionId,
                                     sessionIdsMatch ? "#00ff00" : "#ff4444",
                                     sessionIdsMatch,
+                                    sessionAttrs,
+                                    hasOAuth2State ? "#00ff00" : "#ff4444",
+                                    hasOAuth2State,
                                     request.getRequestURL() + (request.getQueryString() != null ? "?" + request.getQueryString() : "")
                             ));
                         }));
