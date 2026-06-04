@@ -47,10 +47,14 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // OAuth2 state는 세션에 저장. 세션 쿠키는 SameSite=None으로 설정 (application-prod.properties)
-                // → 네이버/구글 cross-site 콜백에서도 세션 쿠키가 전달됨
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                // OAuth2 state는 세션에 저장.
+                // 세션 쿠키는 TomcatConfig + SameSiteCookieFilter로 SameSite=None; Secure 적용
+                // → 네이버/구글 cross-site 콜백에서도 JSESSIONID가 브라우저에 의해 차단되지 않음
+                // sessionFixation().newSession(): 인증 성공 후 새 세션 발급 → 세션 고정 공격 방지
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation().newSession()
+                        .invalidSessionUrl("/oauth2/authorization/naver"))
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
