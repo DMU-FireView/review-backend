@@ -50,11 +50,11 @@ public class SecurityConfig {
                 // OAuth2 state는 세션에 저장.
                 // 세션 쿠키는 TomcatConfig + SameSiteCookieFilter로 SameSite=None; Secure 적용
                 // → 네이버/구글 cross-site 콜백에서도 JSESSIONID가 브라우저에 의해 차단되지 않음
-                // sessionFixation().newSession(): 인증 성공 후 새 세션 발급 → 세션 고정 공격 방지
+                // ⚠️ sessionFixation().newSession() 제거: 인증 전 세션 교체로 OAuth2 state 유실 우려
+                // ⚠️ invalidSessionUrl 제거: OAuth2 콜백 처리 흐름에 간섭 우려
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
-                        .sessionFixation().newSession()
-                        .invalidSessionUrl("/oauth2/authorization/naver"))
+                        .sessionFixation().migrateSession())
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
