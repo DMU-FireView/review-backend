@@ -1,6 +1,7 @@
 package com.example.fireview.global.config;
 
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
+import com.example.fireview.domain.auth.oauth2.LoggingOAuth2AuthorizationRequestRepository;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
 import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -28,17 +29,20 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final LoggingOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final List<String> allowedOriginPatterns;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
+                          LoggingOAuth2AuthorizationRequestRepository authorizationRequestRepository,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
         this.authenticationEntryPoint = authenticationEntryPoint;
+        this.authorizationRequestRepository = authorizationRequestRepository;
         this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
@@ -77,6 +81,8 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)))
                 .oauth2Login(oauth2 -> oauth2
+                        .authorizationEndpoint(auth ->
+                                auth.authorizationRequestRepository(authorizationRequestRepository))
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
