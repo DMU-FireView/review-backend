@@ -47,10 +47,14 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // OAuth2 state는 세션에 저장. 세션 쿠키는 SameSite=None으로 설정 (application-prod.properties)
-                // → 네이버/구글 cross-site 콜백에서도 세션 쿠키가 전달됨
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                // OAuth2 state는 세션에 저장.
+                // 세션 쿠키는 TomcatConfig + SameSiteCookieFilter로 SameSite=None; Secure 적용
+                // → 네이버/구글 cross-site 콜백에서도 JSESSIONID가 브라우저에 의해 차단되지 않음
+                // sessionFixation().newSession(): 인증 성공 후 새 세션 발급 → 세션 고정 공격 방지
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
+                        .sessionFixation().newSession()
+                        .invalidSessionUrl("/oauth2/authorization/naver"))
                 .headers(headers ->
                         headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
@@ -85,6 +89,13 @@ public class SecurityConfig {
                             String cookieHeader = request.getHeader("Cookie");
                             String sessionId = request.getRequestedSessionId();
                             boolean sessionValid = request.isRequestedSessionIdValid();
+                            boolean sessionIdFromCookie = request.isRequestedSessionIdFromCookie();
+
+                            // 현재 세션 생성 여부 확인
+                            jakarta.servlet.http.HttpSession existingSession = request.getSession(false);
+                            String currentSessionId = existingSession != null ? existingSession.getId() : "(세션 없음)";
+                            boolean sessionIdsMatch = existingSession != null && existingSession.getId().equals(sessionId);
+
                             response.setContentType("text/html; charset=UTF-8");
                             response.setStatus(200);
                             response.getWriter().write("""
@@ -93,21 +104,33 @@ public class SecurityConfig {
                                 <head><meta charset="UTF-8"><title>OAuth2 디버그</title></head>
                                 <body style="font-family:monospace; padding:20px; background:#1a1a1a; color:#00ff00;">
                                 <h2 style="color:#ff4444;">❌ OAuth2 로그인 실패</h2>
-                                <table border="1" style="border-collapse:collapse; color:#fff;">
-                                  <tr><td style="padding:8px; background:#333;">에러 타입</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px; background:#333;">에러 메시지</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px; background:#333;">Cookie 헤더</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px; background:#333;">세션 ID</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px; background:#333;">세션 유효</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px; background:#333;">요청 URL</td><td style="padding:8px;">%s</td></tr>
+                                <table border="1" style="border-collapse:collapse; color:#fff; width:100%%;">
+                                  <tr><td style="padding:8px;background:#333;">에러 타입</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">에러 메시지</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">Cookie 헤더</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">브라우저가 보낸 세션 ID</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">세션 유효</td><td style="padding:8px;color:%s;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">쿠키로 전달됨</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">서버 현재 세션 ID</td><td style="padding:8px;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">세션 ID 일치</td><td style="padding:8px;color:%s;">%s</td></tr>
+                                  <tr><td style="padding:8px;background:#333;">요청 URL</td><td style="padding:8px;font-size:11px;">%s</td></tr>
                                 </table>
+                                <p style="color:#aaa;margin-top:16px;">
+                                  ✅ 세션 유효=true + 세션ID 일치=true 이면 SameSite 문제 해결됨<br>
+                                  ❌ 세션 유효=false 이면 SameSite=None이 아직 미적용
+                                </p>
                                 </body></html>
                                 """.formatted(
                                     exception.getClass().getSimpleName(),
                                     exception.getMessage(),
                                     cookieHeader != null ? cookieHeader : "(없음)",
                                     sessionId != null ? sessionId : "(없음)",
+                                    sessionValid ? "#00ff00" : "#ff4444",
                                     sessionValid,
+                                    sessionIdFromCookie,
+                                    currentSessionId,
+                                    sessionIdsMatch ? "#00ff00" : "#ff4444",
+                                    sessionIdsMatch,
                                     request.getRequestURL() + (request.getQueryString() != null ? "?" + request.getQueryString() : "")
                             ));
                         }));
