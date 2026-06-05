@@ -12,6 +12,8 @@ import com.example.fireview.domain.feedback.dto.response.AnalysisFeedbackRespons
 import com.example.fireview.domain.feedback.entity.AnalysisFeedback;
 import com.example.fireview.domain.feedback.entity.AnalysisFeedbackStatus;
 import com.example.fireview.domain.feedback.repository.AnalysisFeedbackRepository;
+import com.example.fireview.domain.notification.entity.NotificationType;
+import com.example.fireview.domain.notification.service.NotificationService;
 import com.example.fireview.domain.report.dto.response.ReportResponse;
 import com.example.fireview.domain.report.entity.ReportStatus;
 import com.example.fireview.domain.report.repository.ReportRepository;
@@ -43,6 +45,7 @@ public class AdminService {
     private final ReviewFeedbackRepository reviewFeedbackRepository;
     private final AnalysisFeedbackRepository analysisFeedbackRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     // ── 대시보드 ─────────────────────────────────────────────────────────────
 
@@ -86,12 +89,55 @@ public class AdminService {
         return analysisFeedbackRepository.findAllWithDetails(pageable).map(AnalysisFeedbackResponse::from);
     }
 
+    /**
+     * 분석 피드백 상태 변경 + 제출자에게 알림 발송.
+     * UNDER_REVIEW / RESOLVED / REJECTED 각 상태에 맞는 알림 유형을 사용한다.
+     */
     @Transactional
     public AnalysisFeedbackResponse reviewFeedback(Long feedbackId, AnalysisFeedbackStatus newStatus) {
         AnalysisFeedback feedback = analysisFeedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new CustomException(ErrorCode.FEEDBACK_NOT_FOUND));
+
         feedback.setStatus(newStatus);
-        return AnalysisFeedbackResponse.from(analysisFeedbackRepository.save(feedback));
+        AnalysisFeedback saved = analysisFeedbackRepository.save(feedback);
+
+        // 상태별 알림 발송
+        sendFeedbackStatusNotification(saved, newStatus);
+
+        return AnalysisFeedbackResponse.from(saved);
+    }
+
+    private void sendFeedbackStatusNotification(AnalysisFeedback feedback, AnalysisFeedbackStatus newStatus) {
+        NotificationType type;
+        String title;
+        String message;
+
+        switch (newStatus) {
+            case UNDER_REVIEW -> {
+                type    = NotificationType.ANALYSIS_FEEDBACK_UNDER_REVIEW;
+                title   = "제출하신 피드백 검토가 시작되었습니다";
+                message = "AI 분석 피드백이 검토 중입니다. 처리 결과는 추후 알려드립니다.";
+            }
+            case RESOLVED -> {
+                type    = NotificationType.ANALYSIS_FEEDBACK_RESOLVED;
+                title   = "제출하신 피드백이 AI 모델에 반영되었습니다";
+                message = "소중한 의견 감사합니다. 피드백이 분석 모델 개선에 반영되었습니다.";
+            }
+            case REJECTED -> {
+                type    = NotificationType.ANALYSIS_FEEDBACK_REJECTED;
+                title   = "제출하신 피드백 검토가 완료되었습니다";
+                message = "검토 결과 현재 분석 모델 기준에 부합하지 않아 반영이 어렵습니다.";
+            }
+            default -> { return; } // SUBMITTED 등 그 외 상태는 알림 없음
+        }
+
+        notificationService.createNotification(
+                feedback.getSubmitter(),
+                type,
+                title,
+                message,
+                "/feedback/me/" + feedback.getId()
+        );
     }
 
     // ── 유저 관리 ─────────────────────────────────────────────────────────────
@@ -121,10 +167,10 @@ public class AdminService {
         );
 
         // 사용자 동의율
-        long totalFeedbacks   = reviewFeedbackRepository.count();
-        long agreementCount   = reviewFeedbackRepository.countAgreementFeedbacks();
+        long totalFeedbacks    = reviewFeedbackRepository.count();
+        long agreementCount    = reviewFeedbackRepository.countAgreementFeedbacks();
         long disagreementCount = totalFeedbacks - agreementCount;
-        double agreementRate  = totalFeedbacks == 0 ? 0.0
+        double agreementRate   = totalFeedbacks == 0 ? 0.0
                 : Math.round(agreementCount * 1000.0 / totalFeedbacks) / 10.0;
 
         UserAgreementStats agreement = new UserAgreementStats(
