@@ -89,72 +89,7 @@ public class SecurityConfig {
                         .failureHandler((request, response, exception) -> {
                             org.slf4j.LoggerFactory.getLogger(SecurityConfig.class)
                                     .error("[OAuth2] 로그인 실패 - {}: {}", exception.getClass().getSimpleName(), exception.getMessage());
-
-                            // [DEBUG] 리다이렉트 대신 HTML 에러 페이지 직접 응답
-                            // 원인 파악 후 아래 블록을 제거하고 sendRedirect로 복구
-                            String cookieHeader = request.getHeader("Cookie");
-                            String sessionId = request.getRequestedSessionId();
-                            boolean sessionValid = request.isRequestedSessionIdValid();
-                            boolean sessionIdFromCookie = request.isRequestedSessionIdFromCookie();
-
-                            // 현재 세션 생성 여부 확인
-                            jakarta.servlet.http.HttpSession existingSession = request.getSession(false);
-                            String currentSessionId = existingSession != null ? existingSession.getId() : "(세션 없음)";
-                            boolean sessionIdsMatch = existingSession != null && existingSession.getId().equals(sessionId);
-
-                            // 세션 속성 목록 (SPRING_SECURITY_OAUTH2_AUTHZ_REQUEST 있는지 확인)
-                            String sessionAttrs = "(세션 없음)";
-                            if (existingSession != null) {
-                                java.util.List<String> attrs = new java.util.ArrayList<>();
-                                java.util.Enumeration<String> names = existingSession.getAttributeNames();
-                                while (names.hasMoreElements()) attrs.add(names.nextElement());
-                                sessionAttrs = attrs.isEmpty() ? "(속성 없음)" : String.join(", ", attrs);
-                            }
-                            boolean hasOAuth2State = existingSession != null &&
-                                    existingSession.getAttribute("SPRING_SECURITY_OAUTH2_AUTHZ_REQUEST") != null;
-
-                            response.setContentType("text/html; charset=UTF-8");
-                            response.setStatus(200);
-                            response.getWriter().write("""
-                                <!DOCTYPE html>
-                                <html>
-                                <head><meta charset="UTF-8"><title>OAuth2 디버그</title></head>
-                                <body style="font-family:monospace; padding:20px; background:#1a1a1a; color:#00ff00;">
-                                <h2 style="color:#ff4444;">❌ OAuth2 로그인 실패</h2>
-                                <table border="1" style="border-collapse:collapse; color:#fff; width:100%%;">
-                                  <tr><td style="padding:8px;background:#333;">에러 타입</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">에러 메시지</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">Cookie 헤더</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">브라우저가 보낸 세션 ID</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">세션 유효</td><td style="padding:8px;color:%s;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">쿠키로 전달됨</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">서버 현재 세션 ID</td><td style="padding:8px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">세션 ID 일치</td><td style="padding:8px;color:%s;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">세션 속성 목록</td><td style="padding:8px;font-size:11px;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">OAuth2 state 존재</td><td style="padding:8px;color:%s;">%s</td></tr>
-                                  <tr><td style="padding:8px;background:#333;">요청 URL</td><td style="padding:8px;font-size:11px;">%s</td></tr>
-                                </table>
-                                <p style="color:#aaa;margin-top:16px;">
-                                  ✅ 세션유효=true + 세션ID일치=true + OAuth2 state 존재=true → 로그인 성공해야 함<br>
-                                  ❌ OAuth2 state 존재=false → state가 다른 세션에 저장됐거나 세션이 교체됨
-                                </p>
-                                </body></html>
-                                """.formatted(
-                                    exception.getClass().getSimpleName(),
-                                    exception.getMessage(),
-                                    cookieHeader != null ? cookieHeader : "(없음)",
-                                    sessionId != null ? sessionId : "(없음)",
-                                    sessionValid ? "#00ff00" : "#ff4444",
-                                    sessionValid,
-                                    sessionIdFromCookie,
-                                    currentSessionId,
-                                    sessionIdsMatch ? "#00ff00" : "#ff4444",
-                                    sessionIdsMatch,
-                                    sessionAttrs,
-                                    hasOAuth2State ? "#00ff00" : "#ff4444",
-                                    hasOAuth2State,
-                                    request.getRequestURL() + (request.getQueryString() != null ? "?" + request.getQueryString() : "")
-                            ));
+                            response.sendRedirect("https://www.beens.kr/login?error");
                         }));
 
         return http.build();
