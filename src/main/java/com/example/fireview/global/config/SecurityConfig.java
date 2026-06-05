@@ -1,7 +1,6 @@
 package com.example.fireview.global.config;
 
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
-import com.example.fireview.domain.auth.oauth2.LoggingOAuth2AuthorizationRequestRepository;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
 import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,20 +28,17 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
-    private final LoggingOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final List<String> allowedOriginPatterns;
 
     public SecurityConfig(JwtDecoder jwtDecoder,
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
-                          LoggingOAuth2AuthorizationRequestRepository authorizationRequestRepository,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns) {
         this.jwtDecoder = jwtDecoder;
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
         this.authenticationEntryPoint = authenticationEntryPoint;
-        this.authorizationRequestRepository = authorizationRequestRepository;
         this.allowedOriginPatterns = allowedOriginPatterns;
     }
 
@@ -51,11 +47,9 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                // OAuth2 state는 세션에 저장.
-                // 세션 쿠키는 TomcatConfig + SameSiteCookieFilter로 SameSite=None; Secure 적용
-                // → 네이버/구글 cross-site 콜백에서도 JSESSIONID가 브라우저에 의해 차단되지 않음
-                // ⚠️ sessionFixation().newSession() 제거: 인증 전 세션 교체로 OAuth2 state 유실 우려
-                // ⚠️ invalidSessionUrl 제거: OAuth2 콜백 처리 흐름에 간섭 우려
+                // OAuth2 state는 세션에 저장
+                // JSESSIONID SameSite=None: TomcatConfig(Rfc6265CookieProcessor)로 적용
+                // 기타 쿠키 SameSite=None: SameSiteCookieFilter로 적용
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
                         .sessionFixation().migrateSession())
@@ -81,8 +75,6 @@ public class SecurityConfig {
                 .oauth2ResourceServer(oauth2 ->
                         oauth2.jwt(jwt -> jwt.decoder(jwtDecoder)))
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(auth ->
-                                auth.authorizationRequestRepository(authorizationRequestRepository))
                         .userInfoEndpoint(userInfo ->
                                 userInfo.userService(customOAuth2UserService))
                         .successHandler(oAuth2SuccessHandler)
