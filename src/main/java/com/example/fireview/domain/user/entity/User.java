@@ -56,6 +56,7 @@ public class User {
     @Column(length = 20)
     private String phone;
 
+    @Builder.Default
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_interest_categories", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "category")
