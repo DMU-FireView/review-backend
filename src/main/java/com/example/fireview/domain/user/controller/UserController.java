@@ -1,5 +1,7 @@
 package com.example.fireview.domain.user.controller;
 
+import com.example.fireview.domain.feedback.dto.response.UnifiedFeedbackResponse;
+import com.example.fireview.domain.feedback.service.FeedbackStatusService;
 import com.example.fireview.domain.user.dto.*;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.domain.user.service.UserSettingService;
@@ -20,6 +22,7 @@ public class UserController {
 
     private final UserService userService;
     private final UserSettingService userSettingService;
+    private final FeedbackStatusService feedbackStatusService;
 
     /** GET /api/users/me — 내 프로필 조회 */
     @GetMapping("/me")
@@ -74,5 +77,13 @@ public class UserController {
             @Valid @RequestBody UserSettingUpdateRequest request) {
         return ApiResponse.success("설정이 변경되었습니다.",
                 userSettingService.updateSettings(jwt.getSubject(), request));
+    }
+
+    /** GET /api/users/me/feedback — 내 신고 + 분석 피드백 통합 목록 */
+    @GetMapping("/me/feedback")
+    public ApiResponse<List<UnifiedFeedbackResponse>> getMyFeedbackHistory(
+            @AuthenticationPrincipal Jwt jwt) {
+        return ApiResponse.success(
+                feedbackStatusService.getUnifiedFeedbacks(jwt.getSubject()));
     }
 }
