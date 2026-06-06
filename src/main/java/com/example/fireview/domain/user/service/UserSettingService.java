@@ -25,21 +25,26 @@ public class UserSettingService {
     }
 
     @Transactional
-    public UserSettingResponse updateSettings(String email, UserSettingUpdateRequest request) {
+    public UserSettingResponse updateSettings(String email, UserSettingUpdateRequest req) {
         User user = userService.findByEmail(email);
-        UserSetting setting = userSettingRepository.findByUser_Id(user.getId())
+        UserSetting s = userSettingRepository.findByUser_Id(user.getId())
                 .orElseGet(() -> UserSetting.builder().user(user).build());
 
-        if (request.notifyReportResult() != null) {
-            setting.setNotifyReportResult(request.notifyReportResult());
-        }
-        if (request.notifyFeedback() != null) {
-            setting.setNotifyFeedback(request.notifyFeedback());
-        }
-        if (request.notifyMarketing() != null) {
-            setting.setNotifyMarketing(request.notifyMarketing());
-        }
+        if (req.notifyRiskyProduct() != null)         s.setNotifyRiskyProduct(req.notifyRiskyProduct());
+        if (req.notifyAnalysisComplete() != null)     s.setNotifyAnalysisComplete(req.notifyAnalysisComplete());
+        if (req.notifyFeedbackResult() != null)       s.setNotifyFeedbackResult(req.notifyFeedbackResult());
+        if (req.notifyMarketing() != null)            s.setNotifyMarketing(req.notifyMarketing());
+        if (req.rtiThreshold() != null)               s.setRtiThreshold(req.rtiThreshold());
+        if (req.hideRiskyReviews() != null)           s.setHideRiskyReviews(req.hideRiskyReviews());
+        if (req.showSuspiciousLabel() != null)        s.setShowSuspiciousLabel(req.showSuspiciousLabel());
+        if (req.prioritizeVerifiedReviews() != null)  s.setPrioritizeVerifiedReviews(req.prioritizeVerifiedReviews());
+        if (req.autoOpenAnalysisPopup() != null)      s.setAutoOpenAnalysisPopup(req.autoOpenAnalysisPopup());
+        if (req.cardDensity() != null)                s.setCardDensity(req.cardDensity());
+        if (req.reviewSortOrder() != null)            s.setReviewSortOrder(req.reviewSortOrder());
+        if (req.rtiLabelStyle() != null)              s.setRtiLabelStyle(req.rtiLabelStyle());
+        if (req.theme() != null)                      s.setTheme(req.theme());
+        if (req.allowDataAnalysis() != null)          s.setAllowDataAnalysis(req.allowDataAnalysis());
 
-        return UserSettingResponse.from(userSettingRepository.save(setting));
+        return UserSettingResponse.from(userSettingRepository.save(s));
     }
 }

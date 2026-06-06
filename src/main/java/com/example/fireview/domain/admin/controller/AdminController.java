@@ -1,8 +1,13 @@
 package com.example.fireview.domain.admin.controller;
 
+import com.example.fireview.domain.admin.dto.request.AdminFeedbackReviewRequest;
 import com.example.fireview.domain.admin.dto.request.AdminReportStatusUpdateRequest;
+import com.example.fireview.domain.admin.dto.response.AdminDashboardResponse;
+import com.example.fireview.domain.admin.dto.response.AdminReviewResponse;
 import com.example.fireview.domain.admin.dto.response.AdminUserResponse;
 import com.example.fireview.domain.admin.service.AdminService;
+import com.example.fireview.domain.feedback.dto.response.AnalysisFeedbackResponse;
+import com.example.fireview.domain.feedback.entity.AnalysisFeedbackStatus;
 import com.example.fireview.domain.report.dto.response.ReportResponse;
 import com.example.fireview.domain.report.entity.ReportStatus;
 import com.example.fireview.global.response.ApiResponse;
@@ -21,10 +26,22 @@ public class AdminController {
 
     private final AdminService adminService;
 
-    /**
-     * 전체 신고 목록 조회
-     * GET /api/admin/reports?status=PENDING&page=0&size=20
-     */
+    /** GET /api/admin/dashboard — 운영 대시보드 통계 */
+    @GetMapping("/dashboard")
+    public ApiResponse<AdminDashboardResponse> getDashboard() {
+        return ApiResponse.success(adminService.getDashboard());
+    }
+
+    /** GET /api/admin/reviews/suspicious?maxRti=50 — 의심 리뷰 목록 */
+    @GetMapping("/reviews/suspicious")
+    public ApiResponse<Page<AdminReviewResponse>> getSuspiciousReviews(
+            @RequestParam(defaultValue = "50") double maxRti,
+            @PageableDefault(size = 20, sort = "rtiScore", direction = Sort.Direction.ASC)
+            Pageable pageable) {
+        return ApiResponse.success(adminService.getSuspiciousReviews(maxRti, pageable));
+    }
+
+    /** GET /api/admin/reports?status=PENDING — 전체 신고 목록 */
     @GetMapping("/reports")
     public ApiResponse<Page<ReportResponse>> getAllReports(
             @RequestParam(required = false) ReportStatus status,
@@ -33,10 +50,7 @@ public class AdminController {
         return ApiResponse.success(adminService.getAllReports(status, pageable));
     }
 
-    /**
-     * 신고 상태 변경
-     * PATCH /api/admin/reports/{reportId}
-     */
+    /** PATCH /api/admin/reports/{reportId} — 신고 상태 변경 */
     @PatchMapping("/reports/{reportId}")
     public ApiResponse<ReportResponse> updateReportStatus(
             @PathVariable Long reportId,
@@ -45,10 +59,25 @@ public class AdminController {
                 adminService.updateReportStatus(reportId, request.status(), request.adminComment()));
     }
 
-    /**
-     * 전체 유저 목록 조회
-     * GET /api/admin/users?page=0&size=20
-     */
+    /** GET /api/admin/analysis-feedbacks?status=SUBMITTED — 분석 피드백 검수 목록 */
+    @GetMapping("/analysis-feedbacks")
+    public ApiResponse<Page<AnalysisFeedbackResponse>> getAllAnalysisFeedbacks(
+            @RequestParam(required = false) AnalysisFeedbackStatus status,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+        return ApiResponse.success(adminService.getAllAnalysisFeedbacks(status, pageable));
+    }
+
+    /** PATCH /api/admin/analysis-feedbacks/{feedbackId} — 분석 피드백 검수 처리 */
+    @PatchMapping("/analysis-feedbacks/{feedbackId}")
+    public ApiResponse<AnalysisFeedbackResponse> reviewFeedback(
+            @PathVariable Long feedbackId,
+            @Valid @RequestBody AdminFeedbackReviewRequest request) {
+        return ApiResponse.success("피드백 검수가 완료되었습니다.",
+                adminService.reviewFeedback(feedbackId, request.status()));
+    }
+
+    /** GET /api/admin/users — 전체 유저 목록 */
     @GetMapping("/users")
     public ApiResponse<Page<AdminUserResponse>> getAllUsers(
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
