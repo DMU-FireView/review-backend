@@ -94,7 +94,7 @@ public class AdminService {
      * UNDER_REVIEW / RESOLVED / REJECTED 각 상태에 맞는 알림 유형을 사용한다.
      */
     @Transactional
-    public AnalysisFeedbackResponse reviewFeedback(Long feedbackId, AnalysisFeedbackStatus newStatus) {
+    public AnalysisFeedbackResponse reviewFeedback(Long feedbackId, AnalysisFeedbackStatus newStatus, String adminComment) {
         AnalysisFeedback feedback = analysisFeedbackRepository.findById(feedbackId)
                 .orElseThrow(() -> new CustomException(ErrorCode.FEEDBACK_NOT_FOUND));
 
@@ -102,12 +102,12 @@ public class AdminService {
         AnalysisFeedback saved = analysisFeedbackRepository.save(feedback);
 
         // 상태별 알림 발송
-        sendFeedbackStatusNotification(saved, newStatus);
+        sendFeedbackStatusNotification(saved, newStatus, adminComment);
 
         return AnalysisFeedbackResponse.from(saved);
     }
 
-    private void sendFeedbackStatusNotification(AnalysisFeedback feedback, AnalysisFeedbackStatus newStatus) {
+    private void sendFeedbackStatusNotification(AnalysisFeedback feedback, AnalysisFeedbackStatus newStatus, String adminComment) {
         NotificationType type;
         String title;
         String message;
