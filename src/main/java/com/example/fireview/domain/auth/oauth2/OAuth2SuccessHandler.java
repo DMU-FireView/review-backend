@@ -39,6 +39,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         // 파라미터 이름: accessToken (프론트 oauth_callback_view_model.dart 규격)
         String redirectUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
                 .queryParam("accessToken", token)
+                .queryParam("tokenType", "Bearer")
                 .queryParam("onboarding", !user.isOnboardingCompleted())
                 .build().toUriString();
 
