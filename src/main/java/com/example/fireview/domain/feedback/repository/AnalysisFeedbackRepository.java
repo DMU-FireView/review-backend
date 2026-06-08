@@ -19,4 +19,9 @@ public interface AnalysisFeedbackRepository extends JpaRepository<AnalysisFeedba
     @Query("SELECT f FROM AnalysisFeedback f JOIN FETCH f.submitter JOIN FETCH f.review "
          + "ORDER BY f.createdAt DESC")
     Page<AnalysisFeedback> findAllWithDetails(Pageable pageable);
+
+    // ── 모델 성능 모니터링용 ───────────────────────────────────────────────────
+
+    /** 상태별 분석 피드백 수 집계 */
+    long countByStatus(AnalysisFeedbackStatus status);
 }
