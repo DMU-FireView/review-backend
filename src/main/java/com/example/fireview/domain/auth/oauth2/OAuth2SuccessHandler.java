@@ -41,6 +41,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .queryParam("accessToken", token)
                 .queryParam("tokenType", "Bearer")
                 .queryParam("email", user.getEmail())
+                .queryParam("nickname", user.getNickname())
                 .queryParam("onboarding", !user.isOnboardingCompleted())
                 .build().toUriString();
 
