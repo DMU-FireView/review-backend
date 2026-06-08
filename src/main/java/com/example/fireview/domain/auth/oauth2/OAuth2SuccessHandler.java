@@ -40,6 +40,7 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         String redirectUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
                 .queryParam("accessToken", token)
                 .queryParam("tokenType", "Bearer")
+                .queryParam("email", user.getEmail())
                 .queryParam("onboarding", !user.isOnboardingCompleted())
                 .build().toUriString();
 
