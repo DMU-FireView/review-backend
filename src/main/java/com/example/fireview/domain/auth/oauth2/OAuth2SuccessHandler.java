@@ -45,7 +45,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
                 .queryParam("onboarding", !user.isOnboardingCompleted())
                 .build().toUriString();
 
-        log.debug("OAuth2 로그인 성공 - email: {}, 온보딩 완료: {}", user.getEmail(), user.isOnboardingCompleted());
+        log.info("OAuth2 로그인 성공 - provider: {}, email: {}, nickname: {}, 온보딩 완료: {}",
+                user.getProvider(), user.getEmail(), user.getNickname(), user.isOnboardingCompleted());
 
         getRedirectStrategy().sendRedirect(request, response, redirectUrl);
     }
