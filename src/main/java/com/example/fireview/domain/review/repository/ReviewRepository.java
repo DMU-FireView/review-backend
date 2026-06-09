@@ -3,6 +3,8 @@ package com.example.fireview.domain.review.repository;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,6 +29,16 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT r.reviewerId AS reviewerId, AVG(r.rtiScore) AS avgRti " +
            "FROM Review r WHERE r.product.id = :productId GROUP BY r.reviewerId")
     List<ReviewerAtiProjection> findReviewerAtiByProductId(@Param("productId") Long productId);
+
+    /** 관리자용: 의심 리뷰 목록 (RTI 낮은 순, 상품 JOIN FETCH) */
+    @Query("SELECT r FROM Review r JOIN FETCH r.product "
+         + "WHERE r.rtiScore < :maxRti ORDER BY r.rtiScore ASC")
+    Page<Review> findSuspiciousReviews(@Param("maxRti") double maxRti, Pageable pageable);
+
+    /** 관리자용: TrustGrade 기준 목록 */
+    @Query("SELECT r FROM Review r JOIN FETCH r.product "
+         + "WHERE r.trustGrade = :grade ORDER BY r.rtiScore ASC")
+    Page<Review> findByTrustGradeWithProduct(@Param("grade") TrustGrade grade, Pageable pageable);
 
     /** ATI 계산용 프로젝션 */
     interface ReviewerAtiProjection {
