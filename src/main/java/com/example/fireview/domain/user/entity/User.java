@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "users")
@@ -51,6 +52,15 @@ public class User {
      */
     @Column(name = "ati_score")
     private Double atiScore;
+
+    @Column(length = 20)
+    private String phone;
+
+    @Builder.Default
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_interest_categories", joinColumns = @JoinColumn(name = "user_id"))
+    @Column(name = "category")
+    private List<String> interestCategories = new java.util.ArrayList<>();
 
     @PrePersist
     protected void onCreate() {

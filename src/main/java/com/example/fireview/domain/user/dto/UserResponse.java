@@ -5,6 +5,7 @@ import com.example.fireview.domain.user.entity.Role;
 import com.example.fireview.domain.user.entity.User;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public record UserResponse(
         Long id,
@@ -15,7 +16,9 @@ public record UserResponse(
         OAuthProvider provider,
         Double atiScore,
         LocalDateTime createdAt,
-        boolean onboardingCompleted
+        boolean onboardingCompleted,
+        String phone,
+        List<String> interestCategories
 ) {
     public static UserResponse from(User user) {
         return new UserResponse(
@@ -27,7 +30,9 @@ public record UserResponse(
                 user.getProvider(),
                 user.getAtiScore(),
                 user.getCreatedAt(),
-                user.isOnboardingCompleted()
+                user.isOnboardingCompleted(),
+                user.getPhone(),
+                user.getInterestCategories()
         );
     }
 }
