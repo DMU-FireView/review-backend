@@ -1,5 +1,6 @@
 package com.example.fireview.domain.user.dto;
 
+import com.example.fireview.domain.user.entity.OAuthProvider;
 import com.example.fireview.domain.user.entity.Role;
 import com.example.fireview.domain.user.entity.User;
 
@@ -9,7 +10,10 @@ public record UserResponse(
         Long id,
         String email,
         String nickname,
+        String profileImageUrl,
         Role role,
+        OAuthProvider provider,
+        Double atiScore,
         LocalDateTime createdAt,
         boolean onboardingCompleted
 ) {
@@ -18,7 +22,10 @@ public record UserResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getNickname(),
+                user.getProfileImageUrl(),
                 user.getRole(),
+                user.getProvider(),
+                user.getAtiScore(),
                 user.getCreatedAt(),
                 user.isOnboardingCompleted()
         );
