@@ -105,7 +105,7 @@ public class UserService {
                 .stream().limit(5).forEach(w -> activities.add(new UserActivityResponse(
                         "WISHLIST_ADD",
                         w.getProduct().getName() + " 저장",
-                        w.getProduct().getId(),
+                        w.getProduct().getId().toString(),
                         w.getCreatedAt()
                 )));
 

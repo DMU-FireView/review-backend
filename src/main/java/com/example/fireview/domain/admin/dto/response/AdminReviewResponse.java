@@ -8,7 +8,7 @@ import java.util.List;
 
 public record AdminReviewResponse(
         Long reviewId,
-        String productId,
+        Long productId,
         String productName,
         String reviewerNickname,
         String content,
