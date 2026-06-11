@@ -1,0 +1,124 @@
+name: 📝 Update session-handover.md on PR merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  update-handover:
+    # PR이 실제로 머지된 경우에만 실행
+    if: github.event.pull_request.merged == true
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update session-handover.md
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: |
+          python3 - <<'PYEOF'
+          import os
+          import re
+          from datetime import datetime, timezone
+
+          HANDOVER = "docs/session-handover.md"
+
+          pr_number = os.environ["PR_NUMBER"]
+          pr_title  = os.environ["PR_TITLE"]
+          pr_branch = os.environ["PR_BRANCH"]
+          merged_at = os.environ["PR_MERGED_AT"]          # ISO8601 UTC
+
+          # 머지 날짜 (KST = UTC+9)
+          dt_utc = datetime.strptime(merged_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+          today  = dt_utc.astimezone(tz=None).strftime("%Y-%m-%d")
+
+          with open(HANDOVER, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          lines = content.splitlines(keepends=True)
+
+          # ── 1. 최종 업데이트 날짜 갱신 ─────────────────────────────────────
+          for i, line in enumerate(lines):
+              if line.startswith("> 최종 업데이트:"):
+                  lines[i] = re.sub(
+                      r"> 최종 업데이트: \d{4}-\d{2}-\d{2}",
+                      f"> 최종 업데이트: {today}",
+                      line
+                  )
+                  break
+
+          # ── 2. 이번 세션 PR 테이블 마지막 행 뒤에 새 행 삽입 ──────────────
+          #    "## ✅ 이번 세션" 섹션을 찾은 뒤
+          #    다음 "##" 이 나오기 직전의 마지막 "|" 행 다음에 삽입
+
+          section_start = None
+          for i, line in enumerate(lines):
+              if re.search(r"^## ✅ 이번 세션", line):
+                  section_start = i
+                  break
+
+          new_row = f"| #{pr_number} | `{pr_branch}` | {pr_title} |\n"
+
+          if section_start is not None:
+              # 섹션 안에서 마지막 테이블 행 위치 탐색
+              last_table_line = None
+              for i in range(section_start + 1, len(lines)):
+                  stripped = lines[i].strip()
+                  if stripped.startswith("##"):  # 다음 섹션 도달
+                      break
+                  if stripped.startswith("|"):
+                      last_table_line = i
+
+              if last_table_line is not None:
+                  # 이미 같은 PR 번호가 있으면 중복 삽입 방지
+                  if f"| #{pr_number} |" not in content:
+                      lines.insert(last_table_line + 1, new_row)
+              else:
+                  # 테이블 행이 없으면 섹션 헤더 바로 뒤에 헤더+행 추가
+                  if f"| #{pr_number} |" not in content:
+                      table_header = "| PR | 브랜치 | 내용 |\n|----|--------|------|\n"
+                      lines.insert(section_start + 1, table_header + new_row)
+          else:
+              # "이번 세션" 섹션이 아예 없으면 파일 끝에 새 섹션 추가
+              if f"| #{pr_number} |" not in content:
+                  new_section = (
+                      f"\n## ✅ 이번 세션({today} ~ )에서 완료한 PR 목록\n\n"
+                      f"| PR | 브랜치 | 내용 |\n|----|--------|------|\n"
+                      f"{new_row}"
+                  )
+                  lines.append(new_section)
+
+          with open(HANDOVER, "w", encoding="utf-8") as f:
+              f.writelines(lines)
+
+          print(f"✅ session-handover.md 업데이트 완료: PR #{pr_number} 추가, 날짜={today}")
+          PYEOF
+
+      - name: Commit & push changes
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add docs/session-handover.md
+
+          # 변경 사항이 없으면 커밋 스킵
+          if git diff --cached --quiet; then
+            echo "변경 사항 없음 — 커밋 스킵"
+            exit 0
+          fi
+
+          git commit -m "docs: session-handover.md 자동 업데이트 — PR #${{ github.event.pull_request.number }} 머지"
+          git push origin main
