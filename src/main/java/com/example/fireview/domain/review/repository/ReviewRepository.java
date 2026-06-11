@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
@@ -39,6 +40,31 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
     @Query("SELECT r FROM Review r JOIN FETCH r.product "
          + "WHERE r.trustGrade = :grade ORDER BY r.rtiScore ASC")
     Page<Review> findByTrustGradeWithProduct(@Param("grade") TrustGrade grade, Pageable pageable);
+
+    // ── 모델 성능 모니터링용 ───────────────────────────────────────────────────
+
+    /** TrustGrade 별 리뷰 수 집계 */
+    long countByTrustGrade(TrustGrade trustGrade);
+
+    /** 전체 평균 RTI 점수 */
+    @Query("SELECT AVG(r.rtiScore) FROM Review r")
+    Double findOverallAverageRti();
+
+    /** 최근 N일 일별 평균 RTI + 건수 (모델 성능 추이) */
+    @Query("SELECT CAST(r.createdAt AS date) AS reviewDate, " +
+           "AVG(r.rtiScore) AS avgRti, COUNT(r) AS cnt " +
+           "FROM Review r " +
+           "WHERE r.createdAt >= :since " +
+           "GROUP BY CAST(r.createdAt AS date) " +
+           "ORDER BY CAST(r.createdAt AS date) ASC")
+    List<DailyRtiProjection> findDailyRtiTrend(@Param("since") LocalDateTime since);
+
+    /** 모델 성능 - 일별 추이 프로젝션 */
+    interface DailyRtiProjection {
+        java.sql.Date getReviewDate();
+        Double getAvgRti();
+        Long getCnt();
+    }
 
     /** ATI 계산용 프로젝션 */
     interface ReviewerAtiProjection {
