@@ -25,7 +25,6 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Collection;
 import java.util.List;
 
 @Configuration
@@ -86,6 +85,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/me").authenticated()
                         .requestMatchers("/api/wishlist/**").authenticated()
                         .requestMatchers("/api/cart/**").authenticated()
+                        .requestMatchers("/api/analysis-feedbacks/**").authenticated()
+                        .requestMatchers("/api/feedback/**").authenticated()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(ex ->
@@ -114,7 +115,6 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /** JWT의 'role' claim을 Spring Security GrantedAuthority(ROLE_*)로 변환 */
     @Bean
     public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
