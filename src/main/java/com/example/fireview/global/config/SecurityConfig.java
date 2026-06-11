@@ -104,7 +104,15 @@ public class SecurityConfig {
                         .failureHandler((request, response, exception) -> {
                             org.slf4j.LoggerFactory.getLogger(SecurityConfig.class)
                                     .error("[OAuth2] 로그인 실패 - {}: {}", exception.getClass().getSimpleName(), exception.getMessage());
-                            response.sendRedirect(frontendRedirectUri.replace("/oauth2/callback", "/login?error=oauth2"));
+                            // 프론트 OAuthCallbackPage가 queryParams['error']를 읽어 에러 처리
+                            // /login?error=oauth2 대신 콜백 페이지로 error 파라미터 전달
+                            String errorType = exception.getClass().getSimpleName()
+                                    .contains("AccessDenied") ? "access_denied" : "server_error";
+                            String failureUrl = org.springframework.web.util.UriComponentsBuilder
+                                    .fromUriString(frontendRedirectUri)
+                                    .queryParam("error", errorType)
+                                    .build().toUriString();
+                            response.sendRedirect(failureUrl);
                         }));
 
         return http.build();

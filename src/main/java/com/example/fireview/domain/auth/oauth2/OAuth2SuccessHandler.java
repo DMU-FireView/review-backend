@@ -34,18 +34,19 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
 
         String token = jwtTokenProvider.generateToken(user);
 
-        // JWT 토큰을 URL Fragment(#)에 담아 리다이렉트
-        // 쿼리 파라미터(?token=) 대신 Fragment를 사용하는 이유:
-        //   - Fragment는 브라우저 히스토리에 남지 않음
-        //   - 서버 액세스 로그에 기록되지 않음
-        //   - Referer 헤더에 포함되지 않아 외부 유출 방지
-        // 예: http://localhost:3000/oauth2/callback#token=eyJhbGci...&onboarding=false
-        String fragment = "token=" + token + "&onboarding=" + !user.isOnboardingCompleted();
+        // JWT 토큰을 Query Param(?)으로 리다이렉트
+        // 프론트엔드 OAuthCallbackPage가 queryParams로 파싱하므로 Fragment(#) 대신 Query Param 사용
+        // 파라미터 이름: accessToken (프론트 oauth_callback_view_model.dart 규격)
         String redirectUrl = UriComponentsBuilder.fromUriString(frontendRedirectUri)
-                .fragment(fragment)
+                .queryParam("accessToken", token)
+                .queryParam("tokenType", "Bearer")
+                .queryParam("email", user.getEmail())
+                .queryParam("nickname", user.getNickname())
+                .queryParam("onboarding", !user.isOnboardingCompleted())
                 .build().toUriString();
 
-        log.debug("OAuth2 로그인 성공 - email: {}, 온보딩 완료: {}", user.getEmail(), user.isOnboardingCompleted());
+        log.info("OAuth2 로그인 성공 - provider: {}, email: {}, nickname: {}, 온보딩 완료: {}",
+                user.getProvider(), user.getEmail(), user.getNickname(), user.isOnboardingCompleted());
 
         getRedirectStrategy().sendRedirect(request, response, redirectUrl);
     }
