@@ -1,5 +1,5 @@
 # 세션 인수인계 자료
-> 최종 업데이트: 2026-06-09 | 프로젝트: FireView (review-backend)
+> 최종 업데이트: 2026-06-11 | 프로젝트: FireView (review-backend)
 
 ---
 
@@ -73,7 +73,7 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 
 ---
 
-## ✅ 이번 세션(2026-06-05 ~ 2026-06-09)에서 완료한 PR 목록
+## ✅ 이번 세션(2026-06-05 ~ 2026-06-11)에서 완료한 PR 목록
 
 | PR | 브랜치 | 내용 |
 |----|--------|------|
@@ -84,6 +84,12 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 | #104 | `feat/feedback-history` | **피드백 내역 조회 구현** (6개 커밋) |
 | #105 | `feat/notification-system` | **알림 시스템 구현** (8개 커밋) |
 | #106 | `feat/mypage-api` | **마이페이지 API 구현** (7개 커밋) |
+| #107 | `docs/session-handover-update` | session-handover.md 업데이트 |
+| #108 | `feat/settings-admin-api` | **설정 API + 관리자 API 구현** (27개 커밋) |
+| #109 | `feat/full-feature-expansion` | **피그마 기반 전체 기능 확장** — 분석 피드백·통합 피드백·관리자 대시보드·신고 개선 (39개 커밋) |
+| #110 | `feat/full-feature-expansion` | `GET /api/users/me/feedback` 엔드포인트 추가 |
+| #124 | `feat/full-feature-expansion` | **이슈 #119 #120** — NotificationType 분리 + 모델 성능 모니터링 API (8개 커밋) |
+| #126 | `fix/oauth2-callback-params` | **OAuth2 콜백 파라미터 전면 수정** — Fragment→Query Param, 파라미터 전달 규격 통일 (6개 커밋) |
 
 ---
 
@@ -94,10 +100,12 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 - **수정**: `HttpCookieOAuth2AuthorizationRequestRepository` 도입. OAuth2 state를 세션 대신 **직접 Set-Cookie 헤더에 쿠키로 저장** → JSESSIONID 의존 완전 제거
 - **핵심 코드**: `response.addHeader("Set-Cookie", "oauth2_auth_request=...; SameSite=None; Secure")`
 
-### 2. OAuth2 여전히 실패 (미해결 — 프론트 이슈)
-- **현상**: 백엔드 수정 후에도 `login?error=oauth2` 계속 발생
-- **확인된 원인**: 프론트가 `api.beens.kr/oauth2/authorization/naver`를 **경유하지 않고** Naver SDK 또는 직접 URL로 이동 중 → 백엔드가 state 쿠키를 저장할 기회 없음
-- **해결 방법**: 프론트 팀이 로그인 버튼 URL을 `https://api.beens.kr/oauth2/authorization/naver`로 변경해야 함
+### 2. OAuth2 콜백 파라미터 불일치 (PR #126으로 해결)
+- **확인된 원인 1**: 백엔드가 URL Fragment(`#token=...`)로 전달 → 프론트 `queryParams`로 파싱 불가 → `accessToken` 항상 null
+- **확인된 원인 2**: 파라미터 이름 불일치 (`token` vs `accessToken`), `email`/`nickname`/`tokenType` 미전달
+- **확인된 원인 3**: 실패 시 `/login?error=oauth2`로 리다이렉트 → `OAuthCallbackPage`가 에러 처리 못함
+- **수정**: `OAuth2SuccessHandler` — Fragment → Query Param, 파라미터 5개 완전 통일 / `SecurityConfig` 실패 핸들러 — 콜백 URL에 `?error=` 전달로 변경
+- **프론트 잔여 수정**: `core/config/app_config.dart`의 `_defaultApiBaseUrl()` → 프로덕션 웹에서 `Uri.base.origin`(`beens.kr`) 반환 문제, 항상 `https://api.beens.kr` 반환하도록 수정 필요
 
 ---
 
