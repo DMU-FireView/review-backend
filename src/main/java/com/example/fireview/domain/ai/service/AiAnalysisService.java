@@ -9,11 +9,15 @@ import com.example.fireview.domain.ai.dto.response.AiProductSummary;
 import com.example.fireview.domain.ai.dto.response.AiRtiTrendResponse;
 import com.example.fireview.domain.ai.dto.response.ProductAnalysisResponse;
 import com.example.fireview.domain.ai.dto.response.SampleReview;
+import com.example.fireview.domain.notification.entity.NotificationType;
+import com.example.fireview.domain.notification.service.NotificationService;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
 import com.example.fireview.domain.review.repository.ReviewRepository;
+import com.example.fireview.domain.user.entity.User;
+import com.example.fireview.domain.user.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,7 @@ import java.util.concurrent.CompletableFuture;
  * 3. AI 서버 3개 API 순차 호출 (product-list, product-detail, rti-trend)
  * 4. 분석 결과로 DB 업데이트 (선택)
  * 5. 프론트엔드에 통합 결과 반환
+ * 6. 분석 완료 시 요청자에게 알림 발송 (notifyAnalysisComplete 설정 확인)
  */
 @Slf4j
 @Service
@@ -46,16 +51,19 @@ public class AiAnalysisService {
     private final AiServerClient aiServerClient;
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
+    private final NotificationService notificationService;
+    private final UserService userService;
 
     /**
      * 상품 ID 로 AI 분석 실행.
      *
      * @param productId  분석 대상 상품 식별자 (네이버 외부 ID 또는 내부 DB ID)
      * @param productUrl 상품 페이지 URL (선택, AI 서버 크롤링 보조)
+     * @param userEmail  분석 요청자 이메일 (null 이면 비로그인 — 알림 미발송)
      * @return 프론트엔드에 전달할 통합 분석 결과
      */
     @Transactional
-    public ProductAnalysisResponse analyzeProduct(String productId, String productUrl) {
+    public ProductAnalysisResponse analyzeProduct(String productId, String productUrl, String userEmail) {
         log.info("[AI Analysis] 분석 시작: productId={}, productUrl={}", productId, productUrl);
 
         AiAnalyzeRequest request = AiAnalyzeRequest.of(productId, productUrl);
@@ -90,7 +98,35 @@ public class AiAnalysisService {
 
         log.info("[AI Analysis] 분석 완료: productId={}", productId);
 
+        // 분석 완료 알림 발송 (로그인 사용자이고 설정이 on 인 경우)
+        sendAnalysisCompleteNotification(userEmail, productId);
+
         return ProductAnalysisResponse.of(productId, listResponse, detailResponse, trendResponse, riskReport);
+    }
+
+    /**
+     * 분석 완료 알림 발송.
+     * 비로그인(userEmail=null) 또는 사용자 설정 off 이면 발송하지 않는다.
+     */
+    private void sendAnalysisCompleteNotification(String userEmail, String productId) {
+        if (userEmail == null || userEmail.isBlank()) return;
+        try {
+            User user = userService.findByEmail(userEmail);
+            String productName = productRepository.findByNaverProductId(productId)
+                    .map(Product::getName)
+                    .orElse("상품(ID: " + productId + ")");
+
+            notificationService.createNotification(
+                    user,
+                    NotificationType.ANALYSIS_COMPLETE,
+                    "AI 분석이 완료되었습니다",
+                    "'" + productName + "'의 AI 리뷰 분석 결과를 확인하세요.",
+                    "/products/" + productId
+            );
+        } catch (Exception e) {
+            // 알림 실패가 분석 결과 반환을 막으면 안 되므로 예외를 삼킨다
+            log.warn("[AI Analysis] 분석 완료 알림 발송 실패 (무시): {}", e.getMessage());
+        }
     }
 
     /**
