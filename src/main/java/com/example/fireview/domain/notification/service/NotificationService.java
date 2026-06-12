@@ -5,8 +5,8 @@ import com.example.fireview.domain.notification.dto.response.UnreadCountResponse
 import com.example.fireview.domain.notification.entity.Notification;
 import com.example.fireview.domain.notification.entity.NotificationType;
 import com.example.fireview.domain.notification.repository.NotificationRepository;
+import com.example.fireview.domain.notification.util.NotificationSettingChecker;
 import com.example.fireview.domain.user.entity.User;
-import com.example.fireview.domain.user.entity.UserSetting;
 import com.example.fireview.domain.user.repository.UserSettingRepository;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
@@ -80,15 +80,14 @@ public class NotificationService {
     public void createNotification(User receiver, NotificationType type,
                                    String title, String message, String targetUrl) {
 
-        // UserSetting 알림 off 체크
+        // UserSetting 알림 off 체크 (settingKey 없으면 항상 발송)
         if (type.getSettingKey() != null) {
             boolean enabled = userSettingRepository.findByUser_Id(receiver.getId())
-                    .map(s -> resolveSettingFlag(s, type.getSettingKey()))
-                    .orElse(true); // 설정 미등록 시 기본값 true (발송)
+                    .map(s -> NotificationSettingChecker.isEnabled(s, type.getSettingKey()))
+                    .orElse(true); // 설정 미등록 시 기본값 true
 
             if (!enabled) {
-                log.debug("[Notification] 알림 설정 off - userId={}, type={}, settingKey={}",
-                        receiver.getId(), type, type.getSettingKey());
+                log.debug("[Notification] 알림 설정 off - userId={}, type={}", receiver.getId(), type);
                 return;
             }
         }
@@ -101,22 +100,6 @@ public class NotificationService {
                 .targetUrl(targetUrl)
                 .build();
         notificationRepository.save(notification);
-    }
-
-    /**
-     * UserSetting 에서 settingKey 에 해당하는 boolean 필드값을 반환한다.
-     * 알려지지 않은 key 는 true(발송)를 기본으로 한다.
-     */
-    private boolean resolveSettingFlag(UserSetting s, String settingKey) {
-        return switch (settingKey) {
-            case "notifyFeedbackResult"   -> s.isNotifyFeedbackResult();
-            case "notifyAnalysisComplete" -> s.isNotifyAnalysisComplete();
-            case "notifyRiskyProduct"     -> s.isNotifyRiskyProduct();
-            case "notifyMarketing"        -> s.isNotifyMarketing();
-            default -> {
-                log.warn("[Notification] 알 수 없는 settingKey: {}", settingKey);
-                yield true;
-            }
-        };
+        log.debug("[Notification] 알림 저장 - userId={}, type={}", receiver.getId(), type);
     }
 }
