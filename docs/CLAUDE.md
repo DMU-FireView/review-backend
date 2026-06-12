@@ -30,6 +30,12 @@ Claude 계열 에이전트를 위한 저장소 루트 진입점입니다.
 - `docs/troubleshooting.md`: 반복되는 실행 실패, 환경 이슈, 테스트 실패 추적 시
 - `docs/MEMORY.md`, `docs/daily/*`: 과거 작업 이력 확인 시
 
+## 커밋 · PR 작성 규칙
+
+- 커밋 메시지에 `Co-Authored-By:`, `Generated with`, `Claude` 등 AI 협력 표기를 **절대 넣지 않습니다**.
+- PR 제목·본문에도 Claude 또는 AI 툴 관련 언급을 넣지 않습니다.
+- 브랜치명에 `claude/` 접두어를 사용하지 않습니다.
+
 ## 작업 규칙
 
 - 같은 규칙 문서를 여러 파일에 중복 작성하지 않습니다.
