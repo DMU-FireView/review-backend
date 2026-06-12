@@ -13,8 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
-
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -34,11 +32,14 @@ public class AuthController {
         return ApiResponse.success(authService.login(request));
     }
 
+    /**
+     * 비밀번호 재설정 요청.
+     * 토큰을 응답으로 반환하지 않고 등록된 이메일로 재설정 링크를 발송한다.
+     */
     @PostMapping("/password/reset-request")
-    public ApiResponse<Map<String, String>> requestPasswordReset(@RequestParam @NotBlank @Email String email) {
-        String token = authService.requestPasswordReset(email);
-        // In production this token is emailed to the user
-        return ApiResponse.success("비밀번호 재설정 토큰이 발급되었습니다.", Map.of("resetToken", token));
+    public ApiResponse<Void> requestPasswordReset(@RequestParam @NotBlank @Email String email) {
+        authService.requestPasswordReset(email);
+        return ApiResponse.ok("비밀번호 재설정 링크가 이메일로 발송되었습니다.");
     }
 
     @PostMapping("/password/reset")
