@@ -69,13 +69,16 @@ public class AdminController {
         return ApiResponse.success(adminService.getAllAnalysisFeedbacks(status, pageable));
     }
 
-    /** PATCH /api/admin/analysis-feedbacks/{feedbackId} — 분석 피드백 검수 처리 */
+    /**
+     * PATCH /api/admin/analysis-feedbacks/{feedbackId} — 분석 피드백 검수 처리.
+     * 상태 변경 시 제출자에게 자동으로 알림이 발송된다.
+     */
     @PatchMapping("/analysis-feedbacks/{feedbackId}")
     public ApiResponse<AnalysisFeedbackResponse> reviewFeedback(
             @PathVariable Long feedbackId,
             @Valid @RequestBody AdminFeedbackReviewRequest request) {
         return ApiResponse.success("피드백 검수가 완료되었습니다.",
-                adminService.reviewFeedback(feedbackId, request.status()));
+                adminService.reviewFeedback(feedbackId, request.status(), request.adminComment()));
     }
 
     /** GET /api/admin/users — 전체 유저 목록 */
