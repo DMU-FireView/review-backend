@@ -18,6 +18,7 @@ import com.example.fireview.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,8 +35,11 @@ import java.util.Random;
  * - 상품당 리뷰 20~50개
  * - 날짜 분포: 최근 30일 (추이 그래프 렌더링 가능)
  * - RTI 분포: safe 60% / warn 30% / danger 10%
+ *
+ * prod 프로파일에서는 실행되지 않는다.
  */
 @Component
+@Profile("!prod")
 @RequiredArgsConstructor
 @Slf4j
 @org.springframework.context.annotation.Profile("!test")
