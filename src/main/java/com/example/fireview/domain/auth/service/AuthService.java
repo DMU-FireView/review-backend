@@ -10,8 +10,11 @@ import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
+import com.example.fireview.global.mail.EmailService;
+import com.example.fireview.global.mail.MailTemplates;
 import com.example.fireview.global.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +28,13 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordResetTokenStore resetTokenStore;
+    private final EmailService emailService;
+
+    @Value("${app.mail.from:noreply@beens.kr}")
+    private String mailFrom;
+
+    @Value("${app.mail.password-reset-base-url:https://www.beens.kr/reset-password}")
+    private String passwordResetBaseUrl;
 
     @Transactional
     public LoginResponse signup(SignupRequest request) {
@@ -57,11 +67,17 @@ public class AuthService {
         return new LoginResponse(token, user.getEmail(), user.getNickname(), user.getRole(), user.isOnboardingCompleted());
     }
 
-    public String requestPasswordReset(String email) {
+    public void requestPasswordReset(String email) {
         userRepository.findByEmail(email)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
-        return resetTokenStore.issue(email);
+        String token = resetTokenStore.issue(email);
+        String resetUrl = passwordResetBaseUrl + "?token=" + token;
+        emailService.sendHtml(
+                email,
+                "[Beens] 비밀번호 재설정 안내",
+                MailTemplates.passwordReset(resetUrl)
+        );
     }
 
     @Transactional
