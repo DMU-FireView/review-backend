@@ -5,22 +5,27 @@ import com.example.fireview.domain.notification.dto.response.UnreadCountResponse
 import com.example.fireview.domain.notification.entity.Notification;
 import com.example.fireview.domain.notification.entity.NotificationType;
 import com.example.fireview.domain.notification.repository.NotificationRepository;
+import com.example.fireview.domain.notification.util.NotificationSettingChecker;
 import com.example.fireview.domain.user.entity.User;
+import com.example.fireview.domain.user.repository.UserSettingRepository;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final UserSettingRepository userSettingRepository;
     private final UserService userService;
 
     // ── 조회 ─────────────────────────────────────────────────────────────────
@@ -62,7 +67,8 @@ public class NotificationService {
     // ── 알림 생성 (내부 호출용) ───────────────────────────────────────────────
 
     /**
-     * 알림 생성 - 다른 서비스에서 이벤트 발생 시 호출
+     * 알림 생성 - 다른 서비스에서 이벤트 발생 시 호출.
+     * NotificationType.settingKey 에 대응하는 UserSetting 필드가 false 이면 발송하지 않는다.
      *
      * @param receiver   수신자
      * @param type       알림 유형
@@ -73,6 +79,19 @@ public class NotificationService {
     @Transactional
     public void createNotification(User receiver, NotificationType type,
                                    String title, String message, String targetUrl) {
+
+        // UserSetting 알림 off 체크 (settingKey 없으면 항상 발송)
+        if (type.getSettingKey() != null) {
+            boolean enabled = userSettingRepository.findByUser_Id(receiver.getId())
+                    .map(s -> NotificationSettingChecker.isEnabled(s, type.getSettingKey()))
+                    .orElse(true); // 설정 미등록 시 기본값 true
+
+            if (!enabled) {
+                log.debug("[Notification] 알림 설정 off - userId={}, type={}", receiver.getId(), type);
+                return;
+            }
+        }
+
         Notification notification = Notification.builder()
                 .receiver(receiver)
                 .type(type)
@@ -81,5 +100,6 @@ public class NotificationService {
                 .targetUrl(targetUrl)
                 .build();
         notificationRepository.save(notification);
+        log.debug("[Notification] 알림 저장 - userId={}, type={}", receiver.getId(), type);
     }
 }

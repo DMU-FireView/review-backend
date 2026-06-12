@@ -11,10 +11,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-// TODO: 운영 단계에서는 Redis(Spring Data Redis) 기반 저장소로 교체.
-//       현재는 단일 인스턴스 가정의 인메모리 구현이며, 스케일 아웃 시 토큰이 공유되지 않음.
+/**
+ * 인메모리 기반 비밀번호 재설정 토큰 저장소 (기본 구현).
+ * 운영 환경에서는 app.auth.redis-token-store.enabled=true 설정 시
+ * RedisPasswordResetTokenStore 가 이 빈을 대체한다.
+ *
+ * 단일 인스턴스 환경에서만 사용 가능하며 서버 재시작 시 토큰이 초기화된다.
+ */
 @Slf4j
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "app.auth.redis-token-store.enabled", havingValue = "false", matchIfMissing = true)
 public class PasswordResetTokenStore {
 
     private static final Duration TTL = Duration.ofMinutes(15);
