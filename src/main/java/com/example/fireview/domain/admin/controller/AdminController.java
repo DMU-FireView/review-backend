@@ -3,6 +3,7 @@ package com.example.fireview.domain.admin.controller;
 import com.example.fireview.domain.admin.dto.request.AdminFeedbackReviewRequest;
 import com.example.fireview.domain.admin.dto.request.AdminReportStatusUpdateRequest;
 import com.example.fireview.domain.admin.dto.response.AdminDashboardResponse;
+import com.example.fireview.domain.admin.dto.response.AdminModelPerformanceResponse;
 import com.example.fireview.domain.admin.dto.response.AdminReviewResponse;
 import com.example.fireview.domain.admin.dto.response.AdminUserResponse;
 import com.example.fireview.domain.admin.service.AdminService;
@@ -83,5 +84,26 @@ public class AdminController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable) {
         return ApiResponse.success(adminService.getAllUsers(pageable));
+    }
+
+    /**
+     * GET /api/admin/model-performance?days=7 — AI 모델 성능 모니터링
+     *
+     * <p>DB 집계 기반 모델 성능 지표를 반환합니다.
+     * <ul>
+     *   <li>RTI 등급 분포 (SAFE / SUSPICIOUS / DANGER 비율)</li>
+     *   <li>사용자 동의율 (AI 판정 vs REAL/FAKE 피드백 일치율)</li>
+     *   <li>분석 피드백 처리 현황 (SUBMITTED / UNDER_REVIEW / RESOLVED / REJECTED)</li>
+     *   <li>최근 N일 일별 평균 RTI 추이</li>
+     * </ul>
+     *
+     * @param days 추이 조회 기간 (기본 7일, 최대 90일)
+     */
+    @GetMapping("/model-performance")
+    public ApiResponse<AdminModelPerformanceResponse> getModelPerformance(
+            @RequestParam(defaultValue = "7") int days) {
+        if (days < 1)  days = 1;
+        if (days > 90) days = 90;
+        return ApiResponse.success(adminService.getModelPerformance(days));
     }
 }

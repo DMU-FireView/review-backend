@@ -54,7 +54,7 @@ public class AnalysisFeedbackService {
 
         notificationService.createNotification(
                 user,
-                NotificationType.REPORT_RECEIVED,
+                NotificationType.ANALYSIS_FEEDBACK_RECEIVED,
                 "분석 피드백이 접수되었습니다",
                 request.feedbackType().getDescription() + " 피드백이 접수되어 검토 중입니다.",
                 "/feedback/me/" + saved.getId()
