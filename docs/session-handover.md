@@ -1,5 +1,5 @@
 # 세션 인수인계 자료
-> 최종 업데이트: 2026-06-11 | 프로젝트: FireView (review-backend)
+> 최종 업데이트: 2026-06-12 | 프로젝트: FireView (review-backend)
 
 ---
 
@@ -90,6 +90,7 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 | #110 | `feat/full-feature-expansion` | `GET /api/users/me/feedback` 엔드포인트 추가 |
 | #124 | `feat/full-feature-expansion` | **이슈 #119 #120** — NotificationType 분리 + 모델 성능 모니터링 API (8개 커밋) |
 | #126 | `fix/oauth2-callback-params` | **OAuth2 콜백 파라미터 전면 수정** — Fragment→Query Param, 파라미터 전달 규격 통일 (6개 커밋) |
+| #127 | `feat/fix-functional-gaps` | **기능 구멍 수정** — 이메일 발송·알림 설정 연동·Redis TokenStore·DataInitializer prod 차단 (20개 커밋) |
 
 ---
 
@@ -235,7 +236,13 @@ redis6-cli keys "naver:product:*" | xargs redis6-cli del
 | `domain/notification/` | 알림 엔티티 / 서비스 / 컨트롤러 |
 | `domain/report/` | 신고 엔티티 / 서비스 / 컨트롤러 |
 | `domain/user/service/UserService.java` | 프로필 조회·수정, 이용 통계, 회원 탈퇴 |
-| `domain/ai/service/AiAnalysisService.java` | AI 분석 병렬 호출 + DB 동기화 |
+| `domain/ai/service/AiAnalysisService.java` | AI 분석 병렬 호출 + DB 동기화 + 분석 완료 알림 |
+| `global/mail/EmailService.java` | 이메일 발송 인터페이스 (SMTP/Log 구현체 선택) |
+| `global/mail/SmtpEmailService.java` | SMTP 실제 발송 (prod 환경, app.mail.enabled=true) |
+| `global/mail/LogEmailService.java` | 콘솔 출력 폴백 (로컬/테스트 환경) |
+| `global/mail/MailTemplates.java` | 비밀번호 재설정·피드백 결과 HTML 템플릿 |
+| `domain/auth/service/RedisPasswordResetTokenStore.java` | Redis 기반 비밀번호 재설정 토큰 저장 (prod) |
+| `domain/notification/util/NotificationSettingChecker.java` | UserSetting 알림 플래그 확인 유틸 |
 | `domain/ai/dto/response/ProductAnalysisResponse.java` | 분석 결과 통합 DTO |
 | `domain/product/entity/Product.java` | id = naverProductId (수동 할당) |
 | `global/config/SecurityConfig.java` | Spring Security 설정, OAuth2 쿠키 저장소 연결 |
@@ -256,23 +263,14 @@ redis6-cli keys "naver:product:*" | xargs redis6-cli del
    - 비로그인 상태에서 개인화 API 호출 → 401 처리 못해 앱 크래시
    - `if (!mounted) return;` 추가, `runZonedGuarded` 전역 에러 핸들러
 
-### 🟡 [백엔드 미구현] 다음 구현 예정
+### 🟡 [백엔드 미구현/잔여]
+
+현재 기능 구멍은 PR #127에서 모두 해소됨. 남은 항목:
 
 | 순번 | 기능 | 설명 |
 |------|------|------|
-| 1 | **설정 API** | 알림 설정 저장/조회 (ON/OFF 토글별 저장) |
-| 2 | **관리자(Admin) API** | 신고 처리(상태 변경), 전체 신고 목록 조회, 사용자 목록 조회 |
-
-#### 설정 API 설계 방향
-- `UserSetting` 엔티티 추가 (user 1:1, 알림 토글 필드들)
-- `GET /api/users/me/settings` — 설정 조회
-- `PATCH /api/users/me/settings` — 설정 변경
-
-#### 관리자 API 설계 방향
-- `PATCH /api/admin/reports/{reportId}` — 신고 상태 변경 (→ 알림 자동 발송)
-- `GET /api/admin/reports` — 전체 신고 목록 (상태 필터, 페이징)
-- `GET /api/admin/users` — 전체 유저 목록
-- Role.ADMIN 권한 체크 필요 (현재 엔티티에 Role.ADMIN 존재, API 없음)
+| 1 | **EC2 환경변수 추가** | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` 추가 필요 (.env.prod) |
+| 2 | **nginx OAuth2 프록시 설정** | `/oauth2/`, `/login/oauth2/` 경로를 nginx가 백엔드로 프록시하도록 추가 필요 |
 
 ### 🟠 [기존 미해결 이슈]
 
