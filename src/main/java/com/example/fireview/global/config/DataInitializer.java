@@ -39,10 +39,9 @@ import java.util.Random;
  * prod 프로파일에서는 실행되지 않는다.
  */
 @Component
-@Profile("!prod")
+@Profile({"!prod", "!test"})
 @RequiredArgsConstructor
 @Slf4j
-@org.springframework.context.annotation.Profile("!test")
 public class DataInitializer implements CommandLineRunner {
 
     private static final java.util.concurrent.atomic.AtomicLong FALLBACK_ID =
