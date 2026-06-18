@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(
     name = "reports",
-    uniqueConstraints = @UniqueConstraint(columnNames = {"reviewer_id", "review_id"})
+    uniqueConstraints = @UniqueConstraint(columnNames = {"reporter_id", "review_id"})
 )
 @Getter
 @Setter
@@ -34,7 +34,7 @@ public class Report {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reviewer_id", nullable = false)
+    @JoinColumn(name = "reporter_id", nullable = false)
     private User reporter;
 
     @ManyToOne(fetch = FetchType.LAZY)
