@@ -39,3 +39,6 @@ out/
 ### Secret & Credentials ###
 src/main/resources/application-secret.properties
 .env
+
+### Claude (로컬 전용 - GitHub 업로드 금지) ###
+.claude/
