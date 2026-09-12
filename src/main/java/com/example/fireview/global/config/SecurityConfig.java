@@ -4,6 +4,7 @@ import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
 import com.example.fireview.domain.auth.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
 import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
+import com.example.fireview.global.security.ServiceTokenFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -36,6 +38,7 @@ public class SecurityConfig {
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
+    private final ServiceTokenFilter serviceTokenFilter;
     private final List<String> allowedOriginPatterns;
     private final String frontendRedirectUri;
 
@@ -44,6 +47,7 @@ public class SecurityConfig {
                           OAuth2SuccessHandler oAuth2SuccessHandler,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
                           HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
+                          ServiceTokenFilter serviceTokenFilter,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns,
                           @Value("${oauth2.redirect-uri}") String frontendRedirectUri) {
         this.jwtDecoder = jwtDecoder;
@@ -51,6 +55,7 @@ public class SecurityConfig {
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.authorizationRequestRepository = authorizationRequestRepository;
+        this.serviceTokenFilter = serviceTokenFilter;
         this.allowedOriginPatterns = allowedOriginPatterns;
         this.frontendRedirectUri = frontendRedirectUri;
     }
@@ -88,7 +93,10 @@ public class SecurityConfig {
                         .requestMatchers("/api/analysis-feedbacks/**").authenticated()
                         .requestMatchers("/api/feedback/**").authenticated()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                        // 서버 간 호출(Data 서버 웹훅 등) — ServiceTokenFilter 가 부여하는 권한만 허용
+                        .requestMatchers("/api/internal/**").hasAuthority(ServiceTokenFilter.ROLE_SERVICE)
                         .anyRequest().authenticated())
+                .addFilterBefore(serviceTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex ->
                         ex.authenticationEntryPoint(authenticationEntryPoint))
                 .oauth2ResourceServer(oauth2 ->
