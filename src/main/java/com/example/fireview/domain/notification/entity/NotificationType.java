@@ -24,8 +24,9 @@ public enum NotificationType {
     ANALYSIS_FEEDBACK_RESOLVED("분석 피드백 처리완료 - 반영", "notifyFeedbackResult"),
     ANALYSIS_FEEDBACK_REJECTED("분석 피드백 처리완료 - 기각", "notifyFeedbackResult"),
 
-    /** AI 분석 완료 — notifyAnalysisComplete 설정 참조 */
+    /** AI 분석 완료/실패 — notifyAnalysisComplete 설정 참조 */
     ANALYSIS_COMPLETE("AI 분석 완료", "notifyAnalysisComplete"),
+    ANALYSIS_FAILED("AI 분석 실패", "notifyAnalysisComplete"),
 
     /** 위험 상품 감지 — notifyRiskyProduct 설정 참조 */
     RISKY_PRODUCT_DETECTED("위험 상품 감지", "notifyRiskyProduct"),
