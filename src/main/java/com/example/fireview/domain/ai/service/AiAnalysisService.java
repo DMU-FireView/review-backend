@@ -18,8 +18,9 @@ import com.example.fireview.domain.review.entity.TrustGrade;
 import com.example.fireview.domain.review.repository.ReviewRepository;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.service.UserService;
-import lombok.RequiredArgsConstructor;
+import com.example.fireview.global.config.ExecutorConfig;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * AI 분석 서비스
@@ -38,14 +40,13 @@ import java.util.concurrent.CompletableFuture;
  * 흐름:
  * 1. 프론트엔드로부터 productId(외부 ID 또는 내부 DB ID) 수신
  * 2. TriggerRequest 구성 (product_id + url)
- * 3. AI 서버 3개 API 순차 호출 (product-list, product-detail, rti-trend)
+ * 3. AI 서버 3개 API 병렬 호출 (product-list, product-detail, rti-trend) — 전용 스레드 풀 사용
  * 4. 분석 결과로 DB 업데이트 (선택)
  * 5. 프론트엔드에 통합 결과 반환
  * 6. 분석 완료 시 요청자에게 알림 발송 (notifyAnalysisComplete 설정 확인)
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AiAnalysisService {
 
     private final AiServerClient aiServerClient;
@@ -53,6 +54,21 @@ public class AiAnalysisService {
     private final ReviewRepository reviewRepository;
     private final NotificationService notificationService;
     private final UserService userService;
+    private final Executor aiCallExecutor;
+
+    public AiAnalysisService(AiServerClient aiServerClient,
+                             ProductRepository productRepository,
+                             ReviewRepository reviewRepository,
+                             NotificationService notificationService,
+                             UserService userService,
+                             @Qualifier(ExecutorConfig.AI_CALL_EXECUTOR) Executor aiCallExecutor) {
+        this.aiServerClient = aiServerClient;
+        this.productRepository = productRepository;
+        this.reviewRepository = reviewRepository;
+        this.notificationService = notificationService;
+        this.userService = userService;
+        this.aiCallExecutor = aiCallExecutor;
+    }
 
     /**
      * 상품 ID 로 AI 분석 실행.
@@ -69,12 +85,13 @@ public class AiAnalysisService {
         AiAnalyzeRequest request = AiAnalyzeRequest.of(productId, productUrl);
 
         // AI 서버 3개 API 병렬 호출 (순차 호출 대비 응답시간 ~3배 단축)
-        CompletableFuture<AiProductListResponse> listFuture =
-                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeProductList(request), "product-list"));
-        CompletableFuture<AiProductDetailResponse> detailFuture =
-                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeProductDetail(request), "product-detail"));
-        CompletableFuture<AiRtiTrendResponse> trendFuture =
-                CompletableFuture.supplyAsync(() -> safeCall(() -> aiServerClient.analyzeRtiTrend(request), "rti-trend"));
+        // executor를 명시하지 않으면 commonPool(2 vCPU에서 스레드 1개)을 써서 사실상 순차 실행된다.
+        CompletableFuture<AiProductListResponse> listFuture = CompletableFuture.supplyAsync(
+                () -> safeCall(() -> aiServerClient.analyzeProductList(request), "product-list"), aiCallExecutor);
+        CompletableFuture<AiProductDetailResponse> detailFuture = CompletableFuture.supplyAsync(
+                () -> safeCall(() -> aiServerClient.analyzeProductDetail(request), "product-detail"), aiCallExecutor);
+        CompletableFuture<AiRtiTrendResponse> trendFuture = CompletableFuture.supplyAsync(
+                () -> safeCall(() -> aiServerClient.analyzeRtiTrend(request), "rti-trend"), aiCallExecutor);
 
         CompletableFuture.allOf(listFuture, detailFuture, trendFuture).join();
 
