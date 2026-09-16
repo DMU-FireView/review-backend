@@ -1,0 +1,41 @@
+package com.example.fireview.global.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+
+import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
+
+/**
+ * 외부 서버 호출용 스레드 풀.
+ *
+ * CompletableFuture.supplyAsync()에 executor를 넘기지 않으면 ForkJoinPool.commonPool()을 쓰는데,
+ * 그 크기는 (CPU 코어 수 - 1)이라 2 vCPU 운영 서버에서는 스레드 1개다.
+ * 블로킹 I/O(RestTemplate)를 그 풀에 올리면 "병렬" 호출이 사실상 순차 실행된다.
+ *
+ * 외부 호출은 CPU가 아니라 대기 시간이 지배적이므로 코어 수와 무관하게 풀을 잡는다.
+ * 요청 하나가 AI 서버 3개 API를 동시에 부르므로 core=6이면 동시 요청 2건까지 대기 없이 처리된다.
+ */
+@Configuration
+public class ExecutorConfig {
+
+    public static final String AI_CALL_EXECUTOR = "aiCallExecutor";
+
+    @Bean(name = AI_CALL_EXECUTOR)
+    public Executor aiCallExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("ai-call-");
+        executor.setCorePoolSize(6);
+        executor.setMaxPoolSize(12);
+        executor.setQueueCapacity(50);
+        executor.setKeepAliveSeconds(60);
+        // 풀과 큐가 모두 차면 호출 스레드가 직접 실행한다.
+        // 요청을 버리는 대신 느려지는 쪽을 택해, AI 서버 지연이 예외로 번지지 않게 한다.
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+}
