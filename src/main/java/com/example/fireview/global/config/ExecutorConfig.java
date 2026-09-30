@@ -21,6 +21,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 public class ExecutorConfig {
 
     public static final String AI_CALL_EXECUTOR = "aiCallExecutor";
+    public static final String CHAT_EXECUTOR = "chatExecutor";
 
     @Bean(name = AI_CALL_EXECUTOR)
     public Executor aiCallExecutor() {
@@ -35,6 +36,32 @@ public class ExecutorConfig {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(30);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 챗봇 LLM 호출 전용 풀.
+     *
+     * AI 분석 호출과 분리한 이유는 부하 성격이 다르기 때문이다.
+     * 분석 호출은 수 초, LLM 챗봇은 수십 초가 걸릴 수 있어 한 풀에 섞으면
+     * 챗봇이 분석 호출을 밀어낸다.
+     *
+     * 포화 시 CallerRunsPolicy 를 쓰지 않는다. 호출 스레드는 DeferredResult 를 만든
+     * Tomcat 워커이고, 거기서 LLM 을 직접 기다리면 워커를 붙잡게 되어
+     * 스레드 분리의 의미가 사라진다. 대신 큐를 넉넉히 두고 넘치면 거부한다.
+     */
+    @Bean(name = CHAT_EXECUTOR)
+    public Executor chatExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("chat-llm-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(100);
+        executor.setKeepAliveSeconds(120);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(60);
         executor.initialize();
         return executor;
     }

@@ -92,6 +92,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/cart/**").authenticated()
                         .requestMatchers("/api/analysis-feedbacks/**").authenticated()
                         .requestMatchers("/api/feedback/**").authenticated()
+                        .requestMatchers("/api/chat/**").authenticated()
                         .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                         // 서버 간 호출(Data 서버 웹훅 등) — ServiceTokenFilter 가 부여하는 권한만 허용
                         .requestMatchers("/api/internal/**").hasAuthority(ServiceTokenFilter.ROLE_SERVICE)

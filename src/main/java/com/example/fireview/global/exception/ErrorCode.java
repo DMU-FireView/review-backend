@@ -41,6 +41,11 @@ public enum ErrorCode {
     // Search
     NAVER_API_NOT_CONFIGURED(HttpStatus.SERVICE_UNAVAILABLE, "네이버 검색 API가 설정되지 않았습니다."),
 
+    // Chat
+    CHAT_SESSION_NOT_FOUND(HttpStatus.NOT_FOUND, "대화를 찾을 수 없습니다."),
+    CHAT_SESSION_FORBIDDEN(HttpStatus.FORBIDDEN, "본인의 대화만 조회할 수 있습니다."),
+    CHAT_LLM_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "챗봇이 일시적으로 응답할 수 없습니다. 잠시 후 다시 시도해주세요."),
+
     // Common
     INVALID_INPUT(HttpStatus.BAD_REQUEST, "입력값이 올바르지 않습니다."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 내부 오류가 발생했습니다.");
