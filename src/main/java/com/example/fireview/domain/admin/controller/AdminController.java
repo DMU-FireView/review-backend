@@ -18,8 +18,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "관리자", description = "운영 대시보드·신고 처리·회원 관리 (ROLE_ADMIN)")
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor

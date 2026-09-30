@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,6 +27,7 @@ import java.util.Map;
  * 2. GET /api/analysis/health 호출 → AI 서버 응답 확인
  */
 @Slf4j
+@Tag(name = "AI 분석", description = "AI 서버 상태 확인")
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor

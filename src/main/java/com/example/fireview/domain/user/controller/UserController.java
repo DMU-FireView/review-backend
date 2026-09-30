@@ -11,10 +11,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "마이페이지", description = "프로필·설정·이용통계·회원탈퇴")
 @RestController
 @RequestMapping("/api/users")
 @RequiredArgsConstructor

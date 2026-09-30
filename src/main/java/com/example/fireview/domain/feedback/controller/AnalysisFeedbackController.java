@@ -12,8 +12,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "분석 피드백", description = "AI 분석 결과에 대한 피드백")
 @RestController
 @RequestMapping("/api/analysis-feedbacks")
 @RequiredArgsConstructor

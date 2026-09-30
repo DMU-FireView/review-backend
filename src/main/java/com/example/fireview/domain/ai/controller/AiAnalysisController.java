@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * BE가 AI 서버에 크롤링+분석을 요청하고 결과를 반환합니다.
  */
 @Slf4j
+@Tag(name = "AI 분석", description = "상품 분석 실행 (Data 서버 이관 예정)")
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor

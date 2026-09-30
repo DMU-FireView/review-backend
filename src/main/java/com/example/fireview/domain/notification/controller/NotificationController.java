@@ -11,8 +11,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "알림", description = "알림 조회 및 읽음 처리")
 @RestController
 @RequestMapping("/api/notifications")
 @RequiredArgsConstructor

@@ -11,8 +11,10 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "인증", description = "회원가입·로그인·비밀번호 재설정")
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
