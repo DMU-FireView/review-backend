@@ -61,7 +61,7 @@ class ChatServiceTest {
         PromptAssembler assembler = new PromptAssembler(objectMapper, guard);
 
         service = new ChatService(sessionRepository, messageRepository, productAnalysisPort,
-                assembler, guard, llmClient, userService, objectMapper);
+                assembler, guard, llmClient, userService);
 
         user = User.builder().id(1L).email(EMAIL).nickname("tester").build();
         when(userService.findByEmail(EMAIL)).thenReturn(user);
@@ -77,7 +77,7 @@ class ChatServiceTest {
 
     @Test
     void 정상_질문이면_답변을_돌려주고_저장한다() {
-        givenLlmReturns("{\"onTopic\": true, \"answer\": \"사이즈가 작다는 의견이 많습니다.\"}", 1800, 120);
+        givenLlmReturns("ONTOPIC: yes\n---\n사이즈가 작다는 의견이 많습니다.", 1800, 120);
 
         ChatService.ChatResult result = service.ask(EMAIL, null, PRODUCT_ID, "이 상품 어때?");
 
@@ -100,7 +100,7 @@ class ChatServiceTest {
 
     @Test
     void 모델이_주제이탈로_판정하면_차단한다() {
-        givenLlmReturns("{\"onTopic\": false, \"answer\": \"상품과 리뷰에 대해서만 도와드릴 수 있어요.\"}", 900, 40);
+        givenLlmReturns("ONTOPIC: no\n---\n상품과 리뷰에 대해서만 도와드릴 수 있어요.", 900, 40);
 
         ChatService.ChatResult result = service.ask(EMAIL, null, PRODUCT_ID, "파이썬으로 크롤러 짜줘");
 
@@ -113,7 +113,7 @@ class ChatServiceTest {
 
     @Test
     void 근거_없는_수치가_있으면_차단한다() {
-        givenLlmReturns("{\"onTopic\": true, \"answer\": \"이 상품의 신뢰도는 98점으로 매우 안전합니다.\"}", 1800, 100);
+        givenLlmReturns("ONTOPIC: yes\n---\n이 상품의 신뢰도는 98점으로 매우 안전합니다.", 1800, 100);
 
         ChatService.ChatResult result = service.ask(EMAIL, null, PRODUCT_ID, "믿을 만해?");
 
@@ -157,7 +157,7 @@ class ChatServiceTest {
 
     @Test
     void 상품이_지정되지_않으면_컨텍스트_없이_호출한다() {
-        givenLlmReturns("{\"onTopic\": true, \"answer\": \"어떤 상품이 궁금하신가요?\"}", 300, 30);
+        givenLlmReturns("ONTOPIC: yes\n---\n어떤 상품이 궁금하신가요?", 300, 30);
 
         ChatService.ChatResult result = service.ask(EMAIL, null, null, "안녕");
 

@@ -12,7 +12,6 @@ import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -41,7 +40,6 @@ public class ChatService {
     private final TopicGuard topicGuard;
     private final LlmClient llmClient;
     private final UserService userService;
-    private final ObjectMapper objectMapper;
 
     /**
      * @param sessionId 이어갈 세션. null 이면 새로 만든다
@@ -74,7 +72,7 @@ public class ChatService {
         }
 
         // ── 세이프가드 3계층: 모델의 주제 판정 ──
-        LlmAnswer parsed = LlmAnswer.parse(response.text(), objectMapper);
+        LlmAnswer parsed = LlmAnswer.parse(response.text());
         if (!parsed.onTopic()) {
             log.info("[Chat] 주제 이탈 응답 - sessionId={}", session.getId());
             return blockAndSave(session, question, "OFF_TOPIC", parsed.answer(),
