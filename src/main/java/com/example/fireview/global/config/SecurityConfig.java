@@ -81,6 +81,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/analysis/**").permitAll()
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
+                        // API 문서 (springdoc). 노출을 막으려면 springdoc.api-docs.enabled=false
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/reviews/*/feedback").authenticated()
                         .requestMatchers("/api/reviews/feedbacks/me/**").authenticated()
