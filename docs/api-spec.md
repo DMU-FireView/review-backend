@@ -1,0 +1,572 @@
+# Spring API 명세서 (프론트엔드 연동용)
+
+> 기준: `main` (2026-09-30) · 컨트롤러 19개 / 엔드포인트 50개
+> 대상: 프론트엔드(Flutter)
+> 이 문서는 **Spring 서비스 서버**가 제공하는 API만 다룬다. Data 서버 API는 별도 문서.
+
+---
+
+## 1. 기본 정보
+
+| 항목 | 값 |
+|------|-----|
+| Base URL | `https://api.re-view.kr` |
+| 프로토콜 | HTTPS 전용 (HTTP는 301 리다이렉트) |
+| 인코딩 | UTF-8 |
+| Content-Type | `application/json` |
+
+### CORS 허용 오리진
+
+```
+https://re-view.kr
+https://www.re-view.kr
+```
+
+`allowCredentials: true`, 노출 헤더 `Authorization`. 목록에 없는 오리진은 브라우저가 차단한다.
+
+### 인증
+
+JWT Bearer 토큰. 로그인/소셜로그인으로 받은 `accessToken`을 헤더에 싣는다.
+
+```
+Authorization: Bearer <accessToken>
+```
+
+- 만료: 24시간 (`jwt.expiration-ms=86400000`)
+- 리프레시 토큰 없음 — 만료되면 재로그인
+- 토큰의 `sub` 는 사용자 이메일, `role` 클레임으로 권한 판정
+
+---
+
+## 2. 공통 응답 포맷
+
+모든 응답은 아래 봉투로 감싸진다.
+
+```json
+{
+  "success": true,
+  "message": "요청이 성공적으로 처리되었습니다.",
+  "data": { },
+  "errorCode": null
+}
+```
+
+| 필드 | 설명 |
+|------|------|
+| `success` | 성공 여부 |
+| `message` | 사람이 읽을 안내 문구 |
+| `data` | 실제 페이로드. 없으면 필드 자체가 생략됨 |
+| `errorCode` | 실패 시에만. 아래 에러 코드 표 참고 |
+
+> `null` 필드는 응답에서 제외된다(`@JsonInclude(NON_NULL)`).
+
+### 실패 응답
+
+```json
+{
+  "success": false,
+  "message": "로그인이 필요합니다.",
+  "errorCode": "UNAUTHORIZED"
+}
+```
+
+### 페이징
+
+Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
+
+```
+?page=0&size=10&sort=createdAt,desc
+```
+
+응답 `data` 구조:
+
+```json
+{
+  "content": [ ],
+  "totalElements": 42,
+  "totalPages": 5,
+  "number": 0,
+  "size": 10,
+  "first": true,
+  "last": false,
+  "empty": false
+}
+```
+
+---
+
+## 3. 에러 코드
+
+| 코드 | HTTP | 의미 |
+|------|------|------|
+| `USER_NOT_FOUND` | 404 | 사용자를 찾을 수 없음 |
+| `EMAIL_ALREADY_EXISTS` | 409 | 이미 사용 중인 이메일 |
+| `NICKNAME_ALREADY_EXISTS` | 409 | 이미 사용 중인 닉네임 |
+| `INVALID_CREDENTIALS` | 401 | 이메일 또는 비밀번호 불일치 |
+| `INVALID_RESET_TOKEN` | 400 | 유효하지 않은 재설정 토큰 |
+| `EXPIRED_RESET_TOKEN` | 400 | 만료된 재설정 토큰 |
+| `UNAUTHORIZED` | 401 | 로그인 필요 |
+| `PRODUCT_NOT_FOUND` | 404 | 상품 없음 |
+| `REVIEW_NOT_FOUND` | 404 | 리뷰 없음 |
+| `FEEDBACK_ALREADY_EXISTS` | 409 | 이미 피드백 제출함 |
+| `FEEDBACK_NOT_FOUND` | 404 | 피드백 내역 없음 |
+| `PREFERENCE_ALREADY_SET` | 409 | 이미 온보딩 완료 |
+| `NOTIFICATION_NOT_FOUND` | 404 | 알림 없음 |
+| `REPORT_NOT_FOUND` | 404 | 신고 내역 없음 |
+| `REPORT_ALREADY_EXISTS` | 409 | 이미 신고한 리뷰 |
+| `REPORT_FORBIDDEN` | 403 | 본인 신고만 조회 가능 |
+| `WISHLIST_ALREADY_EXISTS` | 409 | 이미 찜한 상품 |
+| `WISHLIST_NOT_FOUND` | 404 | 찜 목록에 없음 |
+| `CART_ITEM_NOT_FOUND` | 404 | 장바구니에 없음 |
+| `CHAT_SESSION_NOT_FOUND` | 404 | 대화 없음 |
+| `CHAT_SESSION_FORBIDDEN` | 403 | 본인 대화만 조회 가능 |
+| `CHAT_LLM_UNAVAILABLE` | 503 | 챗봇 일시 응답 불가 |
+| `NAVER_API_NOT_CONFIGURED` | 503 | 네이버 검색 API 미설정 |
+| `INVALID_INPUT` | 400 | 입력값 오류 |
+| `INTERNAL_SERVER_ERROR` | 500 | 서버 내부 오류 |
+
+---
+
+## 4. 인증 (`/api/auth`) — 인증 불필요
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/auth/signup` | 회원가입 |
+| POST | `/api/auth/login` | 로그인 |
+| POST | `/api/auth/password/reset-request` | 비밀번호 재설정 메일 요청 |
+| POST | `/api/auth/password/reset` | 비밀번호 재설정 |
+
+**POST `/api/auth/signup`** — `SignupRequest`
+
+```json
+{ "email": "user@example.com", "password": "pw1234!", "nickname": "홍길동" }
+```
+
+**POST `/api/auth/login`** — `LoginRequest` → `LoginResponse`
+
+```json
+{ "email": "user@example.com", "password": "pw1234!" }
+```
+
+```json
+{
+  "accessToken": "eyJhbGci...",
+  "tokenType": "Bearer",
+  "email": "user@example.com",
+  "nickname": "홍길동",
+  "role": "USER",
+  "onboardingCompleted": false
+}
+```
+
+**POST `/api/auth/password/reset`** — `PasswordResetRequest`
+
+```json
+{ "token": "메일로 받은 토큰", "newPassword": "new1234!" }
+```
+
+### 소셜 로그인
+
+브라우저를 아래 주소로 이동시킨다(XHR 아님).
+
+```
+GET https://api.re-view.kr/oauth2/authorization/google
+GET https://api.re-view.kr/oauth2/authorization/naver
+```
+
+성공 시 프론트 콜백으로 **쿼리 파라미터**와 함께 리다이렉트된다(Fragment 아님).
+
+```
+https://re-view.kr/oauth2/callback
+  ?accessToken=...&tokenType=Bearer&email=...&nickname=...
+```
+
+실패 시:
+
+```
+https://re-view.kr/oauth2/callback?error=access_denied
+https://re-view.kr/oauth2/callback?error=server_error
+```
+
+---
+
+## 5. 상품 · 검색 — 인증 불필요
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/products` | 상품 목록 (`?keyword=` 검색 가능) |
+| GET | `/api/products/{id}` | 상품 상세 |
+| GET | `/api/products/{productId}/reviews` | 상품 리뷰 목록 |
+| GET | `/api/search?keyword=` | 네이버 쇼핑 통합 검색 |
+| GET | `/api/dashboard` | 대시보드 (추천/최근/위험 상품 + 인기 키워드) |
+| GET | `/api/dashboard/keywords` | 인기 검색어 |
+| GET | `/api/landing/stats` | 랜딩 통계 |
+
+**`ProductResponse`** (여러 API 공통)
+
+```json
+{
+  "id": 1,
+  "naverProductId": "7195971829",
+  "name": "베이직 크루넥 니트",
+  "imageUrl": "https://...",
+  "price": 29900,
+  "majorCategory": "FASHION",
+  "majorCategoryDisplayName": "패션",
+  "category": "TOP",
+  "categoryDisplayName": "상의",
+  "subCategory": "니트",
+  "platform": "NAVER",
+  "avgRti": 72.4,
+  "rtiGrade": "WARN",
+  "rtiLevel": "주의",
+  "rtiColor": "#FFA500",
+  "reviewCount": 128,
+  "avgRating": 4.2,
+  "platforms": [{ "platform": "NAVER", "price": 29900, "url": "https://..." }],
+  "lowestPrice": 28500,
+  "lowestPlatform": "GMARKET",
+  "productUrl": "https://..."
+}
+```
+
+**`ReviewResponse`**
+
+```json
+{
+  "id": 10, "productId": 1, "reviewerNickname": "구매자1",
+  "content": "사이즈가 작아요", "rating": 4,
+  "trustGrade": "SAFE", "trustGradeLabel": "안전", "trustGradeColor": "#4CAF50",
+  "reasons": ["구매 인증됨"], "writtenAt": "2026-09-01T10:00:00",
+  "isVerifiedPurchase": true, "reviewerAtiScore": 81.2
+}
+```
+
+**`DashboardResponse`**
+
+```json
+{
+  "recommendedProducts": [ ], "recentProducts": [ ],
+  "riskyProducts": [ ], "popularKeywords": ["니트", "패딩"]
+}
+```
+
+---
+
+## 6. AI 분석 — 인증 불필요
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/analysis/product` | 상품 분석 실행 |
+| GET | `/api/analysis/health` | AI 서버 상태 |
+
+**POST `/api/analysis/product`** — `ProductAnalyzeRequest` → `ProductAnalysisResponse`
+
+```json
+{ "productId": "7195971829", "productUrl": "https://..." }
+```
+
+```json
+{
+  "productId": "7195971829",
+  "averageRti": 72.4, "level": "주의", "reviewCount": 128,
+  "safeCount": 80, "warnCount": 30, "dangerCount": 18,
+  "reviews": [{
+    "reviewId": "r-1", "content": "...", "author": "구매자1", "date": "2026-09-01",
+    "rti": 81, "level": "안전",
+    "textScore": 85, "behaviorScore": 78, "networkScore": 80,
+    "reasons": ["구매 인증됨"]
+  }],
+  "trend": [{ "date": "2026-09-01", "averageRti": 70.1, "reviewCount": 12,
+              "safeCount": 8, "warnCount": 3, "dangerCount": 1 }],
+  "realReviewRatio": 0.62, "adSuspicionRatio": 0.21, "repetitiveRatio": 0.17,
+  "trustSignals": [{ "label": "작성일 편중", "value": "동일 날짜 32건", "isPositive": false }]
+}
+```
+
+> ⚠️ 이 엔드포인트는 Data 서버 연동 후 제거될 예정이다. 신규 화면은 Data 서버 API 를 쓴다.
+
+---
+
+## 7. 챗봇 (`/api/chat`) — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/chat/messages` | 질문 전송 |
+| GET | `/api/chat/sessions` | 내 대화 목록 (페이징) |
+| GET | `/api/chat/sessions/{sessionId}/messages` | 대화 내용 |
+
+**POST `/api/chat/messages`** — `ChatRequest` → `ChatResponse`
+
+```json
+{ "sessionId": null, "productId": "7195971829", "question": "이 상품 살만해?" }
+```
+
+| 필드 | 필수 | 설명 |
+|------|------|------|
+| `sessionId` | | `null` 이면 새 대화 시작. 이어가려면 응답의 값을 그대로 전달 |
+| `productId` | | 대화 대상 상품. **새 대화일 때만 반영**된다 |
+| `question` | ✅ | 최대 **500자** |
+
+```json
+{
+  "sessionId": 10,
+  "answer": "사이즈가 작게 나온다는 의견이 많습니다...",
+  "blocked": false,
+  "blockReason": null,
+  "usedTokens": 1850
+}
+```
+
+### 세이프가드 — `blocked` 처리
+
+챗봇은 상품·리뷰·가격·카테고리·신뢰도 밖의 질문에 답하지 않는다. 차단되면 `blocked: true` 로 오고 `answer` 에 안내 문구가 담긴다. **에러가 아니라 200 응답**이므로 정상 흐름으로 처리해야 한다.
+
+| `blockReason` | 상황 | 권장 UI |
+|---|---|---|
+| `INJECTION` | 프롬프트 조작 시도 감지 | 안내 문구만 표시 |
+| `TOO_LONG` | 500자 초과 | 입력창에 길이 안내 |
+| `EMPTY` | 빈 질문 | 전송 버튼 비활성화로 예방 |
+| `OFF_TOPIC` | 주제 이탈 | 안내 문구 표시, 예시 질문 제안 |
+| `UNGROUNDED_SCORE` | 근거 없는 수치 감지 | 재질문 유도 |
+
+`usedTokens` 는 이번 턴의 LLM 토큰 소모량이다. 쿼터가 유한하므로 개발 중 모니터링에 쓸 수 있다.
+
+**응답 지연**: LLM 호출은 수 초~수십 초가 걸린다. 서버 타임아웃은 70초이므로 클라이언트 타임아웃을 그보다 길게 잡고 로딩 UI 를 반드시 둘 것.
+
+**GET `/api/chat/sessions`** → `Page<ChatSessionResponse>`
+
+```json
+{ "id": 10, "productId": "7195971829", "title": "이 상품 살만해?",
+  "createdAt": "2026-09-30T10:00:00", "lastMessageAt": "2026-09-30T10:05:00" }
+```
+
+**GET `/api/chat/sessions/{sessionId}/messages`** → `List<ChatMessageResponse>`
+
+```json
+{ "id": 1, "role": "USER", "content": "이 상품 살만해?",
+  "blocked": false, "blockReason": null, "createdAt": "2026-09-30T10:00:00" }
+```
+
+`role` 은 `USER` / `ASSISTANT`. 차단된 대화도 이력에 남는다.
+
+---
+
+## 8. 마이페이지 (`/api/users/me`) — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/users/me` | 프로필 조회 |
+| PATCH | `/api/users/me` | 프로필 수정 |
+| DELETE | `/api/users/me` | 회원 탈퇴 |
+| GET | `/api/users/me/stats` | 이용 통계 |
+| GET | `/api/users/me/activities` | 최근 활동 |
+| GET | `/api/users/me/security` | 보안 상태 |
+| GET | `/api/users/me/settings` | 설정 조회 |
+| PATCH | `/api/users/me/settings` | 설정 수정 |
+| GET | `/api/users/me/feedback` | 통합 피드백 내역 |
+
+**`UserResponse`**
+
+```json
+{
+  "id": 1, "email": "user@example.com", "nickname": "홍길동",
+  "profileImageUrl": null, "role": "USER", "provider": "LOCAL",
+  "atiScore": 76.5, "createdAt": "2026-04-01T09:00:00",
+  "onboardingCompleted": true, "phone": "010-1234-5678",
+  "interestCategories": ["패션", "뷰티"]
+}
+```
+
+**PATCH `/api/users/me`** — `ProfileUpdateRequest` (보낸 필드만 수정)
+
+```json
+{ "nickname": "새닉네임", "profileImageUrl": "https://...",
+  "phone": "010-0000-0000", "interestCategories": ["패션"] }
+```
+
+**`UserStatsResponse`**
+
+```json
+{ "wishlistCount": 5, "feedbackCount": 12, "reportCount": 2, "unreadNotificationCount": 3 }
+```
+
+**`UserSettingResponse`** / **`UserSettingUpdateRequest`** (14개 필드, PATCH는 `null` 무시)
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `notifyRiskyProduct` | boolean | 위험 상품 알림 |
+| `notifyAnalysisComplete` | boolean | 분석 완료 알림 |
+| `notifyFeedbackResult` | boolean | 피드백 결과 알림 |
+| `notifyMarketing` | boolean | 마케팅 수신 |
+| `rtiThreshold` | int | RTI 경고 임계값 |
+| `hideRiskyReviews` | boolean | 위험 리뷰 숨김 |
+| `showSuspiciousLabel` | boolean | 의심 라벨 표시 |
+| `prioritizeVerifiedReviews` | boolean | 구매인증 리뷰 우선 |
+| `autoOpenAnalysisPopup` | boolean | 분석 팝업 자동 열기 |
+| `cardDensity` | String | 카드 밀도 |
+| `reviewSortOrder` | String | 리뷰 정렬 기준 |
+| `rtiLabelStyle` | String | RTI 라벨 표기 |
+| `theme` | String | 테마 |
+| `allowDataAnalysis` | boolean | 데이터 분석 동의 |
+
+**`UserSecurityResponse`**
+
+```json
+{ "emailVerified": true, "twoFactorEnabled": false, "loginMethod": "LOCAL",
+  "passwordLastChanged": "2026-08-01T00:00:00", "termsAgreed": true,
+  "notificationPermissionGranted": true }
+```
+
+---
+
+## 9. 온보딩 (`/api/onboarding`) — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/onboarding/categories` | 선택 가능 카테고리 |
+| GET | `/api/onboarding/preferences` | 내 선호 설정 |
+| POST | `/api/onboarding/preferences` | 선호 설정 저장 |
+
+```json
+{ "preferredCategories": ["FASHION", "BEAUTY"], "minTrustScore": 60 }
+```
+
+---
+
+## 10. 찜 · 장바구니 — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/wishlist` | 찜 목록 |
+| POST | `/api/wishlist/{productId}` | 찜 추가 |
+| DELETE | `/api/wishlist/{productId}` | 찜 해제 |
+| GET | `/api/wishlist/{productId}/check` | 찜 여부 확인 |
+| GET | `/api/cart` | 장바구니 조회 |
+| POST | `/api/cart/{productId}` | 장바구니 추가 |
+| PUT | `/api/cart/{productId}` | 수량 변경 |
+| DELETE | `/api/cart/{productId}` | 항목 삭제 |
+| DELETE | `/api/cart` | 전체 비우기 |
+
+**`CartSummaryResponse`**
+
+```json
+{ "items": [ ], "totalCount": 3, "subtotal": 89700,
+  "shippingFee": 3000, "totalPrice": 92700 }
+```
+
+---
+
+## 11. 리뷰 피드백 · 신고 — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| POST | `/api/reviews/{reviewId}/feedback` | 리뷰 피드백 (REAL/FAKE) |
+| GET | `/api/reviews/feedbacks/me` | 내 피드백 목록 |
+| GET | `/api/reviews/feedbacks/me/{feedbackId}` | 내 피드백 상세 |
+| POST | `/api/reports/reviews/{reviewId}` | 리뷰 신고 |
+| GET | `/api/reports/me` | 내 신고 목록 |
+| GET | `/api/reports/me/{reportId}` | 내 신고 상세 |
+| POST | `/api/analysis-feedbacks/reviews/{reviewId}` | 분석 결과 피드백 |
+| GET | `/api/analysis-feedbacks/me` | 내 분석 피드백 목록 |
+| GET | `/api/analysis-feedbacks/me/{feedbackId}` | 내 분석 피드백 상세 |
+| GET | `/api/feedback/me` | **통합** 피드백 현황 (신고 + 분석 피드백) |
+
+**POST `/api/reports/reviews/{reviewId}`** — `ReportCreateRequest`
+
+```json
+{ "reason": "ADVERTISEMENT", "detail": "20자 이상 500자 이내 상세 사유",
+  "attachmentUrl": null, "includeAiEvidence": true }
+```
+
+`detail` 은 20~500자 제약이 있다.
+
+**GET `/api/feedback/me`** → `Page<UnifiedFeedbackResponse>` — 신고와 분석 피드백을 한 화면에 보여줄 때 사용
+
+```json
+{ "id": 1, "feedbackCategory": "REPORT", "typeLabel": "광고성 리뷰",
+  "productName": "베이직 니트", "reviewContent": "...",
+  "status": "UNDER_REVIEW", "statusDescription": "검토 중",
+  "currentStep": 2, "totalSteps": 4, "createdAt": "2026-09-01T10:00:00" }
+```
+
+---
+
+## 12. 알림 (`/api/notifications`) — **인증 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/notifications/me` | 내 알림 목록 (페이징) |
+| GET | `/api/notifications/me/unread-count` | 안 읽은 알림 수 |
+| PATCH | `/api/notifications/{notificationId}/read` | 단건 읽음 |
+| PATCH | `/api/notifications/me/read-all` | 전체 읽음 |
+
+**`NotificationResponse`**
+
+```json
+{ "notificationId": 1, "type": "ANALYSIS_COMPLETE", "typeDescription": "AI 분석 완료",
+  "title": "AI 분석이 완료되었습니다", "message": "'베이직 니트'의 분석 결과를 확인하세요.",
+  "isRead": false, "targetUrl": "/products/7195971829",
+  "createdAt": "2026-09-30T10:00:00" }
+```
+
+`targetUrl` 은 알림 클릭 시 이동할 프론트 경로다.
+
+**알림 타입**
+
+| 타입 | 설명 |
+|------|------|
+| `REPORT_RECEIVED` / `REPORT_UNDER_REVIEW` / `REPORT_ACCEPTED` / `REPORT_REJECTED` | 신고 처리 단계 |
+| `ANALYSIS_FEEDBACK_RECEIVED` / `_UNDER_REVIEW` / `_RESOLVED` / `_REJECTED` | 분석 피드백 처리 단계 |
+| `ANALYSIS_COMPLETE` / `ANALYSIS_FAILED` | AI 분석 완료·실패 |
+| `RISKY_PRODUCT_DETECTED` | 위험 상품 감지 |
+| `SYSTEM` | 시스템 공지 |
+
+> 알림 발송은 `UserSetting` 의 대응 항목이 꺼져 있으면 생성되지 않는다.
+
+---
+
+## 13. 관리자 (`/api/admin`) — **`ROLE_ADMIN` 필요**
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/admin/dashboard` | 운영 대시보드 통계 |
+| GET | `/api/admin/reviews/suspicious` | 의심 리뷰 목록 |
+| GET | `/api/admin/reports` | 전체 신고 목록 |
+| PATCH | `/api/admin/reports/{reportId}` | 신고 상태 변경 |
+| GET | `/api/admin/analysis-feedbacks` | 전체 분석 피드백 |
+| PATCH | `/api/admin/analysis-feedbacks/{feedbackId}` | 피드백 검수 |
+| GET | `/api/admin/users` | 회원 목록 |
+| GET | `/api/admin/model-performance` | AI 모델 성능 통계 |
+
+권한이 없으면 403. JWT 의 `role` 클레임이 `ADMIN` 이어야 한다.
+
+---
+
+## 14. 내부 API (`/api/internal`) — 서버 간 전용
+
+프론트엔드는 호출하지 않는다. `X-Service-Token` 헤더로 인증하며, Data 서버가 분석 완료를 알릴 때 사용한다. 규격은 [webhook-contract.md](webhook-contract.md) 참고.
+
+---
+
+## 15. 알아두면 좋은 것
+
+**비로그인 401 포맷** — 인증이 필요한 API 를 토큰 없이 호출하면 스프링 기본 401 이 아니라 위의 공통 포맷으로 응답한다.
+
+```json
+{ "success": false, "message": "로그인이 필요합니다.", "errorCode": "UNAUTHORIZED" }
+```
+
+**리버스 프록시** — nginx 가 `X-Forwarded-*` 를 넘기고 서버가 이를 신뢰하므로, OAuth2 `redirect_uri` 등이 외부 도메인 기준으로 생성된다.
+
+**세션 쿠키** — `Secure`, `HttpOnly`. HTTPS 에서만 동작한다.
+
+**향후 변경 예정** — Data 서버 연동이 완료되면 아래가 제거되거나 Data 서버로 이동한다. 신규 개발 시 참고할 것.
+
+| 대상 | 이동처 |
+|------|--------|
+| `/api/products/**` | Data 서버 |
+| `/api/reviews/**` (조회) | Data 서버 |
+| `/api/search` | Data 서버 |
+| `/api/analysis/**` | Data 서버 |
+| `/api/dashboard/**` | Data 서버 |
