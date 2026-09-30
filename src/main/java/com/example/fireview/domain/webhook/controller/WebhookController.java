@@ -5,6 +5,7 @@ import com.example.fireview.domain.webhook.service.WebhookService;
 import com.example.fireview.global.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 서버 간 웹훅 수신 엔드포인트.
  * /api/internal/** 은 ServiceTokenFilter 가 검증한 X-Service-Token 이 있어야 접근된다.
  */
+@Tag(name = "내부 웹훅", description = "서버 간 호출 전용. 프론트엔드는 사용하지 않음")
 @RestController
 @RequestMapping("/api/internal/webhooks")
 @RequiredArgsConstructor

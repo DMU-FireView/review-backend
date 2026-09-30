@@ -4,11 +4,13 @@ import com.example.fireview.domain.search.dto.NaverSearchResponse;
 import com.example.fireview.domain.search.service.NaverSearchService;
 import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+@Tag(name = "검색", description = "네이버 쇼핑 통합 검색 (Data 서버 이관 예정)")
 @RestController
 @RequestMapping("/api/search")
 @RequiredArgsConstructor

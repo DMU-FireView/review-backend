@@ -13,10 +13,12 @@ import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "상품", description = "상품 목록·상세·리뷰 (Data 서버 이관 예정)")
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor

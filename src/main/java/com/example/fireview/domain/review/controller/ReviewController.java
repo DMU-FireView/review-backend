@@ -12,8 +12,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "리뷰 피드백", description = "리뷰 진위 피드백")
 @RestController
 @RequestMapping("/api/reviews")
 @RequiredArgsConstructor

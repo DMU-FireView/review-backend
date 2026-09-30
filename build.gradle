@@ -36,6 +36,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     // LLM 챗봇 - Anthropic 공식 Java SDK (Codyssey 게이트웨이를 base-url 로 지정해 사용)
     implementation 'com.anthropic:anthropic-java:2.34.0'
+    // OpenAPI 3 스펙 자동 생성 + Swagger UI (Spring Boot 3.x 대응 2.8.x)
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     compileOnly 'org.projectlombok:lombok'
