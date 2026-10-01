@@ -130,3 +130,75 @@ optional.ifPresent(this::process);
 Order order = optional.orElseThrow(() ->
     new OrderException(OrderErrorCode.ORDER_NOT_FOUND));
 ```
+
+## API 문서화 규칙
+
+API를 추가하거나 바꾸면 문서도 같은 PR에서 함께 갱신합니다.
+문서 갱신이 빠진 PR은 완료로 보지 않습니다.
+
+### 자동으로 되는 것 — 손대지 않습니다
+
+`springdoc-openapi`가 컨트롤러와 DTO에서 스펙을 추출합니다.
+엔드포인트 경로, HTTP 메서드, 요청·응답 스키마, 필드 타입, Bean Validation 제약은
+코드를 고치면 자동으로 따라옵니다.
+
+- Swagger UI: `/swagger-ui.html`
+- OpenAPI JSON: `/v3/api-docs`
+
+**스펙을 손으로 쓰지 않습니다.** 코드가 곧 스펙입니다.
+
+### 수동으로 해야 하는 것
+
+#### 1. 새 컨트롤러에는 `@Tag` 를 답니다
+
+없으면 Swagger UI에 클래스명이 그대로 노출되고 그룹이 흩어집니다.
+
+```java
+@Tag(name = "찜", description = "찜 목록 관리")
+@RestController
+@RequestMapping("/api/wishlist")
+public class WishlistController {
+```
+
+- `name` 은 한글 도메인명으로 짧게 (기존 태그와 겹치면 같은 그룹으로 묶입니다)
+- 이관 예정이거나 폐기 예정이면 `description` 에 적습니다
+
+#### 2. 스키마만으로 알 수 없는 동작은 `@Operation` 으로 설명합니다
+
+응답 형태는 같은데 의미가 다른 경우가 대상입니다. 필드 이름만 보고 오해할 여지가 있으면 적습니다.
+
+```java
+@Operation(summary = "질문 전송", description = """
+        세이프가드에 걸려도 200 으로 응답한다. 에러가 아니므로 정상 흐름으로 처리할 것.
+        """)
+```
+
+판단 기준은 **"프론트가 이걸 모르면 잘못 구현할까?"** 입니다.
+
+- 성공 응답인데 실패를 뜻하는 필드가 있다 → 적습니다
+- 응답이 느리거나 타임아웃 고려가 필요하다 → 적습니다
+- 단순 CRUD 라 스키마만 봐도 명확하다 → 적지 않습니다
+
+#### 3. `docs/api-spec.md` 를 갱신합니다
+
+Swagger가 담지 못하는 **배경과 맥락**을 담는 문서입니다.
+
+| 변경 | 해야 할 일 |
+|------|-----------|
+| 엔드포인트 추가 | 해당 절의 표에 한 줄 추가 |
+| 엔드포인트 삭제·경로 변경 | 표에서 제거하거나 수정 |
+| 인증 요구사항 변경 | 절 제목의 인증 표기 수정 |
+| `ErrorCode` 추가 | 에러 코드 표에 추가 |
+| 새 도메인 추가 | 절을 새로 만들고 목차 반영 |
+
+요청·응답 필드를 하나하나 옮겨 적지 않습니다. 그건 Swagger의 몫입니다.
+**본문 내용이 Swagger와 다르면 Swagger가 맞습니다.**
+
+### 신규 API 추가 시 체크리스트
+
+- [ ] 컨트롤러에 `@Tag` 가 있는가 (새 컨트롤러인 경우)
+- [ ] 스키마만으로 오해할 동작이 있다면 `@Operation` 으로 설명했는가
+- [ ] `docs/api-spec.md` 의 해당 절 표에 반영했는가
+- [ ] 새 `ErrorCode` 를 추가했다면 에러 코드 표에도 넣었는가
+- [ ] 인증이 필요한 경로라면 `SecurityConfig` 에 규칙을 추가했는가
+- [ ] 로컬에서 `/v3/api-docs` 를 열어 의도대로 생성되는지 확인했는가
