@@ -4,10 +4,12 @@ import com.example.fireview.domain.chat.client.LlmClient;
 import com.example.fireview.domain.chat.entity.ChatMessage;
 import com.example.fireview.domain.chat.entity.ChatRole;
 import com.example.fireview.domain.chat.entity.ChatSession;
+import com.example.fireview.domain.chat.entity.ChatTier;
 import com.example.fireview.domain.chat.port.ProductAnalysisContext;
 import com.example.fireview.domain.chat.port.ProductAnalysisPort;
 import com.example.fireview.domain.chat.repository.ChatMessageRepository;
 import com.example.fireview.domain.chat.repository.ChatSessionRepository;
+import com.example.fireview.domain.user.entity.PlanTier;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
@@ -18,6 +20,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -25,8 +28,13 @@ import java.util.List;
 /**
  * 챗봇 대화 오케스트레이션.
  *
- * 흐름: 세이프가드 1계층 → 컨텍스트 조회 → 프롬프트 조립 → LLM 호출
- *      → 구조화 응답 파싱(3계층) → 세이프가드 4계층 → 저장
+ * 흐름: 요금제 검사 → 세이프가드 1계층 → 쿼터 차감 → 컨텍스트 조회
+ *      → 프롬프트 조립 → LLM 호출 → 구조화 응답 파싱(3계층)
+ *      → 세이프가드 4계층 → 저장
+ *
+ * <p><b>쿼터를 차감하는 시점</b>이 중요하다. 세이프가드 1계층에서 막힌 질문은
+ * LLM 을 부르지 않아 비용이 0 이므로 사용량으로 세지 않는다. 반대로 LLM 을
+ * 부른 뒤 주제 이탈로 막힌 턴은 토큰을 이미 썼으므로 사용량에 포함한다.
  */
 @Slf4j
 @Service
@@ -40,20 +48,38 @@ public class ChatService {
     private final TopicGuard topicGuard;
     private final LlmClient llmClient;
     private final UserService userService;
+    private final ChatPlanPolicy planPolicy;
+    private final ChatQuotaStore quotaStore;
 
     /**
+     * @param tier      호출된 엔드포인트의 등급. 요금제가 이 등급을 쓸 수 없으면 403
      * @param sessionId 이어갈 세션. null 이면 새로 만든다
      * @param productId 대화 대상 상품 (새 세션일 때만 사용)
      */
     @Transactional
-    public ChatResult ask(String userEmail, Long sessionId, String productId, String question) {
+    public ChatResult ask(String userEmail, ChatTier tier,
+                          Long sessionId, String productId, String question) {
         User user = userService.findByEmail(userEmail);
+        PlanTier plan = user.getEffectivePlan();
+
+        // ── 요금제 검사: 세션을 만들기 전에 끊어 빈 대화가 남지 않게 한다 ──
+        planPolicy.verifyAccess(plan, tier);
+
         ChatSession session = resolveSession(user, sessionId, productId, question);
 
-        // ── 세이프가드 1계층: 입력 검증 (여기서 막히면 토큰 소모 0) ──
+        // ── 세이프가드 1계층: 입력 검증 (여기서 막히면 토큰 소모 0 → 쿼터도 차감 안 함) ──
         TopicGuard.Verdict input = topicGuard.inspectQuestion(question);
         if (!input.allowed()) {
-            return blockAndSave(session, question, input.reason(), input.userMessage());
+            return blockAndSave(session, user, plan, question, input.reason(), input.userMessage());
+        }
+
+        // ── 쿼터 차감: LLM 을 부르기 직전에 한다 ──
+        int dailyLimit = planPolicy.dailyLimit(plan);
+        if (!quotaStore.tryConsume(user.getId(), dailyLimit)) {
+            log.info("[Chat] 하루 한도 초과 - userId={}, plan={}, limit={}",
+                    user.getId(), plan, dailyLimit);
+            // 던져서 트랜잭션을 되돌린다. 위에서 만든 새 세션도 같이 사라진다.
+            throw new CustomException(ErrorCode.CHAT_QUOTA_EXCEEDED);
         }
 
         ProductAnalysisContext context = session.getProductId() == null ? null
@@ -65,8 +91,11 @@ public class ChatService {
 
         LlmClient.LlmResponse response;
         try {
-            response = llmClient.complete(systemPrompt, history, userMessage);
+            response = llmClient.complete(systemPrompt, history, userMessage,
+                    planPolicy.llmOptions(tier));
         } catch (RuntimeException e) {
+            // 답변을 못 준 턴은 사용량에서 뺀다. 서버 잘못으로 한도를 깎지 않는다.
+            quotaStore.refund(user.getId());
             log.error("[Chat] LLM 호출 실패 - sessionId={}: {}", session.getId(), e.getMessage());
             throw new CustomException(ErrorCode.CHAT_LLM_UNAVAILABLE);
         }
@@ -75,14 +104,14 @@ public class ChatService {
         LlmAnswer parsed = LlmAnswer.parse(response.text());
         if (!parsed.onTopic()) {
             log.info("[Chat] 주제 이탈 응답 - sessionId={}", session.getId());
-            return blockAndSave(session, question, "OFF_TOPIC", parsed.answer(),
+            return blockAndSave(session, user, plan, question, "OFF_TOPIC", parsed.answer(),
                     response.inputTokens(), response.outputTokens());
         }
 
         // ── 세이프가드 4계층: 근거 없는 수치 차단 ──
         TopicGuard.Verdict output = topicGuard.inspectAnswer(parsed.answer(), context);
         if (!output.allowed()) {
-            return blockAndSave(session, question, output.reason(), output.userMessage(),
+            return blockAndSave(session, user, plan, question, output.reason(), output.userMessage(),
                     response.inputTokens(), response.outputTokens());
         }
 
@@ -91,7 +120,14 @@ public class ChatService {
         session.touch();
 
         return new ChatResult(session.getId(), parsed.answer(), false, null,
-                response.inputTokens() + response.outputTokens());
+                response.inputTokens() + response.outputTokens(), quotaOf(user, plan));
+    }
+
+    /** 오늘 남은 사용량. 프론트가 전송 버튼을 막거나 남은 횟수를 보여줄 때 쓴다 */
+    @Transactional(readOnly = true)
+    public QuotaStatus getQuotaStatus(String userEmail) {
+        User user = userService.findByEmail(userEmail);
+        return quotaOf(user, user.getEffectivePlan());
     }
 
     @Transactional(readOnly = true)
@@ -144,16 +180,29 @@ public class ChatService {
                 .toList();
     }
 
-    private ChatResult blockAndSave(ChatSession session, String question, String reason, String userMessage) {
-        return blockAndSave(session, question, reason, userMessage, null, null);
+    private ChatResult blockAndSave(ChatSession session, User user, PlanTier plan, String question,
+                                    String reason, String userMessage) {
+        return blockAndSave(session, user, plan, question, reason, userMessage, null, null);
     }
 
-    private ChatResult blockAndSave(ChatSession session, String question, String reason,
-                                    String userMessage, Integer inputTokens, Integer outputTokens) {
+    private ChatResult blockAndSave(ChatSession session, User user, PlanTier plan, String question,
+                                    String reason, String userMessage,
+                                    Integer inputTokens, Integer outputTokens) {
         saveTurn(session, question, userMessage, true, reason, inputTokens, outputTokens);
         session.touch();
         int used = (inputTokens == null ? 0 : inputTokens) + (outputTokens == null ? 0 : outputTokens);
-        return new ChatResult(session.getId(), userMessage, true, reason, used);
+        return new ChatResult(session.getId(), userMessage, true, reason, used,
+                quotaOf(user, plan));
+    }
+
+    private QuotaStatus quotaOf(User user, PlanTier plan) {
+        int limit = planPolicy.dailyLimit(plan);
+        int used = quotaStore.used(user.getId());
+        int remaining = limit == ChatQuotaStore.UNLIMITED
+                ? ChatQuotaStore.UNLIMITED
+                : Math.max(0, limit - used);
+        return new QuotaStatus(plan, limit, used, remaining,
+                planPolicy.canUse(plan, ChatTier.PRO), quotaStore.resetAt());
     }
 
     private void saveTurn(ChatSession session, String question, String answer,
@@ -191,8 +240,20 @@ public class ChatService {
     /**
      * @param blocked     세이프가드에 걸렸는지
      * @param blockReason 차단 사유 (blocked=true 일 때)
-     * @param usedTokens  이번 턴에 소모한 토큰 (쿼터 추적용)
+     * @param usedTokens  이번 턴에 소모한 토큰
+     * @param quota       이 턴을 반영한 오늘 사용량
      */
     public record ChatResult(Long sessionId, String answer, boolean blocked,
-                             String blockReason, int usedTokens) {}
+                             String blockReason, int usedTokens, QuotaStatus quota) {}
+
+    /**
+     * @param plan         적용 중인 요금제 (만료된 유료 요금제는 FREE 로 내려온 값)
+     * @param dailyLimit   하루 한도. -1 이면 무제한
+     * @param usedToday    오늘 사용한 메시지 수
+     * @param remaining    남은 메시지 수. -1 이면 무제한
+     * @param proAvailable PRO 엔드포인트를 쓸 수 있는지
+     * @param resetAt      한도가 초기화되는 시각
+     */
+    public record QuotaStatus(PlanTier plan, int dailyLimit, int usedToday, int remaining,
+                              boolean proAvailable, Instant resetAt) {}
 }
