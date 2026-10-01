@@ -43,3 +43,7 @@ src/main/resources/application-secret.properties
 
 ### Claude (로컬 전용 - GitHub 업로드 금지) ###
 .claude/
+
+### 과제 산출물 (저장소 추적 제외) ###
+FireView_*.txt
+*.docx
