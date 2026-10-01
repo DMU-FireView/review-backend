@@ -33,9 +33,13 @@ public class AnthropicLlmClient implements LlmClient {
     }
 
     @Override
-    public LlmResponse complete(String systemPrompt, List<Turn> history, String userMessage) {
-        MessageCreateParams params = buildParams(systemPrompt, history, userMessage);
-        Message response = client.messages().create(params);
+    public LlmResponse complete(String systemPrompt, List<Turn> history, String userMessage,
+                                LlmOptions options) {
+        LlmOptions effective = options == null ? LlmOptions.defaults() : options;
+        String usedModel = effective.model() == null ? model : effective.model();
+
+        Message response = client.messages().create(
+                buildParams(systemPrompt, history, userMessage, effective));
 
         String text = response.content().stream()
                 .flatMap(block -> block.text().stream())
@@ -44,7 +48,8 @@ public class AnthropicLlmClient implements LlmClient {
 
         int input = (int) response.usage().inputTokens();
         int output = (int) response.usage().outputTokens();
-        log.info("[LLM] 응답 수신 - input={}, output={}, total={}", input, output, input + output);
+        log.info("[LLM] 응답 수신 - model={}, input={}, output={}, total={}",
+                usedModel, input, output, input + output);
 
         return new LlmResponse(text, input, output);
     }
@@ -60,10 +65,12 @@ public class AnthropicLlmClient implements LlmClient {
         return (int) client.messages().countTokens(builder.build()).inputTokens();
     }
 
-    private MessageCreateParams buildParams(String systemPrompt, List<Turn> history, String userMessage) {
+    /** 옵션에 값이 있으면 그 값을, 없으면 설정 파일의 기본값을 쓴다. options 는 null 이 아니어야 한다 */
+    private MessageCreateParams buildParams(String systemPrompt, List<Turn> history,
+                                            String userMessage, LlmOptions options) {
         MessageCreateParams.Builder builder = MessageCreateParams.builder()
-                .model(model)
-                .maxTokens(maxTokens)
+                .model(options.model() == null ? model : options.model())
+                .maxTokens(options.maxTokens() == null ? maxTokens : options.maxTokens())
                 .system(systemPrompt);
         appendTurns(history, userMessage,
                 builder::addUserMessage,
