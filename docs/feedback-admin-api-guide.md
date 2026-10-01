@@ -8,7 +8,7 @@
 ## 공통 사항
 
 ```
-베이스 URL: https://api.beens.kr
+베이스 URL: https://api.re-view.kr
 인증 헤더: Authorization: Bearer {accessToken}
 공통 응답: { "success": true, "message": "...", "data": { ... } }
 ```

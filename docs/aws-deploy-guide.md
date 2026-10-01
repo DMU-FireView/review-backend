@@ -296,9 +296,9 @@ NAVER_CLIENT_ID=xxxx
 NAVER_CLIENT_SECRET=xxxx
 
 # ── CORS / 리다이렉트 ────────────────────────────
-CORS_ALLOWED_ORIGINS=https://www.beens.kr,https://beens.kr
-OAUTH2_REDIRECT_URI=https://www.beens.kr/oauth2/callback
-FRONTEND_URL=https://www.beens.kr
+CORS_ALLOWED_ORIGINS=https://re-view.kr,https://www.re-view.kr
+OAUTH2_REDIRECT_URI=https://re-view.kr/auth/callback
+FRONTEND_URL=https://re-view.kr
 
 # ── 네이버 쇼핑 검색 API ──────────────────────────
 # (OAuth2용 키와 별개. 미설정 시 로컬 DB 검색으로 fallback)
@@ -311,7 +311,7 @@ MAIL_HOST=smtp.gmail.com
 MAIL_PORT=587
 MAIL_USERNAME=발신계정@gmail.com
 MAIL_PASSWORD=앱_비밀번호
-MAIL_FROM=noreply@beens.kr
+MAIL_FROM=noreply@re-view.kr
 ```
 
 권한을 잠근다:

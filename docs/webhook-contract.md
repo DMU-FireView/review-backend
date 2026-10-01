@@ -10,7 +10,7 @@
 ## 1. 엔드포인트
 
 ```
-POST https://api.beens.kr/api/internal/webhooks/analysis-complete
+POST https://api.re-view.kr/api/internal/webhooks/analysis-complete
 Content-Type: application/json
 X-Service-Token: <SERVICE_TOKEN>
 ```
@@ -84,7 +84,7 @@ Spring은 같은 `jobId`를 **한 번만** 처리한다. 같은 jobId가 다시 
 ## 7. curl 예시
 
 ```bash
-curl -X POST https://api.beens.kr/api/internal/webhooks/analysis-complete \
+curl -X POST https://api.re-view.kr/api/internal/webhooks/analysis-complete \
   -H "Content-Type: application/json" \
   -H "X-Service-Token: $SERVICE_TOKEN" \
   -d '{

@@ -15,7 +15,7 @@ Spring Boot 백엔드는 FastAPI AI 서버와 HTTP 통신으로 연동됩니다.
     │
     │  POST /api/analysis/product
     ▼
-Spring Boot (api.beens.kr)
+Spring Boot (api.re-view.kr)
     │
     │  5개 API 순차 호출 (safeCall - 개별 실패 허용)
     ▼
