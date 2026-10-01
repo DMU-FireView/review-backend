@@ -27,15 +27,52 @@ jobs:
             echo "▶ Docker 이미지 빌드"
             docker build -t fireview:latest .
 
-            echo "▶ 기존 컨테이너 교체"
-            docker stop fireview || true
-            docker rm fireview || true
+            echo "▶ 기존 컨테이너 제거"
+            # stop + rm 을 따로 하면 rm 반환 후에도 데몬이 이름을 잠시 붙들어
+            # 바로 이어지는 run 이 이름 충돌로 실패한다. rm -f 로 합치고 해제를 기다린다.
+            docker rm -f fireview 2>/dev/null || true
+            for i in $(seq 1 15); do
+              if [ -z "$(docker ps -aq --filter 'name=^fireview$')" ]; then break; fi
+              echo "  이름 해제 대기... ($i/15)"
+              sleep 1
+            done
+            if [ -n "$(docker ps -aq --filter 'name=^fireview$')" ]; then
+              echo "❌ 기존 컨테이너를 제거하지 못했다"
+              exit 1
+            fi
+
+            echo "▶ 새 컨테이너 실행"
             docker run -d \
               --name fireview \
               --restart unless-stopped \
               --env-file .env.prod \
               -p 8080:8080 \
               fireview:latest
+
+            echo "▶ 기동 확인"
+            # 컨테이너가 떴다고 앱이 뜬 것은 아니다.
+            # 환경변수 누락 등으로 즉시 죽어도 여기서 잡아낸다.
+            OK=""
+            for i in $(seq 1 60); do
+              if ! docker ps -q --filter 'name=^fireview$' | grep -q .; then
+                echo "❌ 컨테이너가 종료됐다"
+                break
+              fi
+              if curl -sf --max-time 3 http://localhost:8080/actuator/health 2>/dev/null | grep -q '"status":"UP"'; then
+                OK=1
+                echo "✅ 기동 확인 ($((i * 10))초 이내)"
+                break
+              fi
+              sleep 10
+            done
+
+            if [ -z "$OK" ]; then
+              echo "❌ 기동 실패 - 최근 로그 80줄"
+              echo "────────────────────────────────────────"
+              docker logs --tail 80 fireview 2>&1 || true
+              echo "────────────────────────────────────────"
+              exit 1
+            fi
 
             echo "▶ 미사용 이미지 정리"
             docker image prune -f

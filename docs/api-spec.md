@@ -1,8 +1,29 @@
 # Spring API 명세서 (프론트엔드 연동용)
 
-> 기준: `main` (2026-09-30) · 컨트롤러 19개 / 엔드포인트 50개
 > 대상: 프론트엔드(Flutter)
 > 이 문서는 **Spring 서비스 서버**가 제공하는 API만 다룬다. Data 서버 API는 별도 문서.
+
+## 📌 정확한 스펙은 Swagger 를 보세요
+
+코드에서 자동 생성되는 **항상 최신** 스펙이 있다.
+엔드포인트와 스키마의 정확한 정의는 아래가 기준이고, 이 문서는 배경 설명과 연동 주의사항을 담은 보조 자료다.
+
+| 용도 | 주소 |
+|------|------|
+| 브라우저에서 탐색·직접 호출 | `https://api.re-view.kr/swagger-ui.html` |
+| OpenAPI 3 JSON (코드 생성용) | `https://api.re-view.kr/v3/api-docs` |
+
+Swagger UI 우측 상단 **Authorize** 에 로그인 응답의 `accessToken` 을 넣으면
+인증이 필요한 API 도 그대로 호출해볼 수 있다. (`Bearer ` 접두어는 자동으로 붙는다)
+
+OpenAPI JSON 은 클라이언트 코드 생성에 바로 쓸 수 있다.
+
+```bash
+openapi-generator generate -i https://api.re-view.kr/v3/api-docs -g dart-dio -o ./lib/api
+```
+
+> 아래 본문은 작성 시점(2026-09-30, 엔드포인트 50개) 기준이다.
+> 숫자나 필드가 Swagger 와 다르면 **Swagger 가 맞다.**
 
 ---
 
