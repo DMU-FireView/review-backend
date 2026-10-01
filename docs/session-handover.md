@@ -5,18 +5,22 @@
 
 ## 🖥️ 인프라 정보
 
+> ⚠️ **자격 증명은 이 문서에 적지 않습니다.**
+> DB 비밀번호, API 키 등은 EC2 의 `~/review-backend/.env.prod` 에만 둡니다.
+> 문서에 적으면 git 이력에 영구히 남아 삭제해도 복구됩니다.
+
 | 항목 | 값 |
 |------|-----|
-| EC2 서버 | `ec2-user@ip-172-31-44-47` |
-| 백엔드 도메인 | `https://api.beens.kr` |
-| 프론트엔드 도메인 | `https://beens.kr` |
-| EC2 공인 IP | `3.39.78.175` |
+| 백엔드 도메인 | `https://api.re-view.kr` |
+| 프론트엔드 도메인 | `https://re-view.kr` (Vercel) |
+| API 문서 | `https://api.re-view.kr/swagger-ui.html` |
+| EC2 | `ssh fireview` (별칭 등록 시) / Amazon Linux 2023, t3.small |
 | AI 서버 (Azure) | `http://20.249.211.171:8000` |
-| DB | PostgreSQL RDS `fireview-db-1.c18oucqqk15z.ap-northeast-2.rds.amazonaws.com:5432/postgres` |
-| DB 계정 | `fireview1` / `FireviewProd2026!` |
+| DB | PostgreSQL RDS — 엔드포인트와 계정은 `.env.prod` 의 `DB_URL`, `DB_USERNAME` 참고 |
 | Docker 컨테이너 | `fireview` |
-| nginx | EC2에서 실행 중 (포트 443 → 8080 프록시) |
+| nginx | EC2에서 실행 중 (443 → 8080 프록시, Let's Encrypt 인증서 자동 갱신) |
 | Redis | EC2 호스트에서 실행 중 (`redis6`, 포트 6379) |
+| 컨테이너→Redis | `172.17.0.1` (Docker 브리지 게이트웨이). `localhost` 는 컨테이너 자신을 가리켜 닿지 않음 |
 
 ### EC2 서버 관리 명령어
 ```bash
@@ -34,8 +38,9 @@ docker logs --tail 5 fireview
 redis6-cli ping
 redis6-cli keys "naver:product:*"
 
-# DB 접속
-PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2.rds.amazonaws.com -U fireview1 -d postgres
+# DB 접속 (자격 증명은 .env.prod 에서 읽는다)
+set -a && . ~/review-backend/.env.prod && set +a
+psql "$(echo "$DB_URL" | sed 's|jdbc:||')" -U "$DB_USERNAME"
 ```
 
 ---
@@ -106,7 +111,7 @@ PGPASSWORD='FireviewProd2026!' psql -h fireview-db-1.c18oucqqk15z.ap-northeast-2
 - **확인된 원인 2**: 파라미터 이름 불일치 (`token` vs `accessToken`), `email`/`nickname`/`tokenType` 미전달
 - **확인된 원인 3**: 실패 시 `/login?error=oauth2`로 리다이렉트 → `OAuthCallbackPage`가 에러 처리 못함
 - **수정**: `OAuth2SuccessHandler` — Fragment → Query Param, 파라미터 5개 완전 통일 / `SecurityConfig` 실패 핸들러 — 콜백 URL에 `?error=` 전달로 변경
-- **프론트 잔여 수정**: `core/config/app_config.dart`의 `_defaultApiBaseUrl()` → 프로덕션 웹에서 `Uri.base.origin`(`beens.kr`) 반환 문제, 항상 `https://api.beens.kr` 반환하도록 수정 필요
+- **프론트 잔여 수정**: `core/config/app_config.dart`의 `_defaultApiBaseUrl()` 수정 — 프론트 PR #176 에서 처리
 
 ---
 
@@ -256,8 +261,8 @@ redis6-cli keys "naver:product:*" | xargs redis6-cli del
 ### 🔴 [최우선] 프론트 수정 요청 (백엔드 작업 불필요)
 
 1. **OAuth2 로그인 버튼 URL 수정**
-   - 네이버: `window.location.href = 'https://api.beens.kr/oauth2/authorization/naver'`
-   - 구글: `window.location.href = 'https://api.beens.kr/oauth2/authorization/google'`
+   - 네이버: `window.location.href = 'https://re-view.kr/oauth2/authorization/naver'`
+   - 구글: `window.location.href = 'https://re-view.kr/oauth2/authorization/google'`
 
 2. **Flutter 비로그인 시 인증 API 호출 차단**
    - 비로그인 상태에서 개인화 API 호출 → 401 처리 못해 앱 크래시

@@ -30,10 +30,10 @@ public class AuthService {
     private final PasswordResetTokenStore resetTokenStore;
     private final EmailService emailService;
 
-    @Value("${app.mail.from:noreply@beens.kr}")
+    @Value("${app.mail.from:noreply@re-view.kr}")
     private String mailFrom;
 
-    @Value("${app.mail.password-reset-base-url:https://www.beens.kr/reset-password}")
+    @Value("${app.mail.password-reset-base-url:https://re-view.kr/reset-password}")
     private String passwordResetBaseUrl;
 
     @Transactional
