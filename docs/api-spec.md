@@ -142,6 +142,8 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 | `CHAT_SESSION_NOT_FOUND` | 404 | 대화 없음 |
 | `CHAT_SESSION_FORBIDDEN` | 403 | 본인 대화만 조회 가능 |
 | `CHAT_LLM_UNAVAILABLE` | 503 | 챗봇 일시 응답 불가 |
+| `CHAT_QUOTA_EXCEEDED` | 429 | 하루 챗봇 메시지 한도 초과 |
+| `CHAT_PLAN_REQUIRED` | 403 | 상위 요금제 전용 기능 |
 | `NAVER_API_NOT_CONFIGURED` | 503 | 네이버 검색 API 미설정 |
 | `INVALID_INPUT` | 400 | 입력값 오류 |
 | `INTERNAL_SERVER_ERROR` | 500 | 서버 내부 오류 |
@@ -313,9 +315,34 @@ https://re-view.kr/oauth2/callback?error=server_error
 
 | Method | Path | 설명 |
 |--------|------|------|
-| POST | `/api/chat/messages` | 질문 전송 |
+| POST | `/api/chat/messages` | 질문 전송 (모든 요금제) |
+| POST | `/api/chat/pro/messages` | 질문 전송 (`PRO` 요금제 전용) |
+| GET | `/api/chat/quota` | 오늘 남은 사용량 |
 | GET | `/api/chat/sessions` | 내 대화 목록 (페이징) |
 | GET | `/api/chat/sessions/{sessionId}/messages` | 대화 내용 |
+
+### 요금제와 하루 한도
+
+| 요금제 | 하루 메시지 | `/messages` | `/pro/messages` |
+|---|---|---|---|
+| `FREE` | 5 | O | X (403) |
+| `PLUS` | 100 | O | X (403) |
+| `PRO` | 300 | O | O |
+
+- 한도 수치는 서버 설정값(`app.chat.quota.*`)이라 **바뀔 수 있다.** 화면에는 하드코딩하지 말고 응답의 `quota` 를 쓸 것.
+- 한도는 **한국 시간 자정**에 초기화된다 (`quota.resetAt`).
+- 두 전송 엔드포인트는 **같은 카운터**를 쓴다. 프로로 10개를 보냈으면 기본에서도 10개가 깎여 있다.
+- 요금제는 JWT 가 아니라 DB 값이라 변경이 **즉시** 반영된다. 재로그인은 필요 없다.
+- 만료된 유료 요금제는 자동으로 `FREE` 로 동작한다.
+
+**쿼터를 깎는 기준**
+
+| 상황 | 차감 |
+|---|---|
+| 정상 답변 | O |
+| 세이프가드 1계층 차단 (`INJECTION` / `TOO_LONG` / `EMPTY`) | X — LLM 을 부르지 않아 비용이 0 |
+| `OFF_TOPIC` / `UNGROUNDED_SCORE` | O — 이미 토큰을 썼다 |
+| LLM 호출 실패 (503) | X — 서버 잘못으로 한도를 깎지 않는다 |
 
 **POST `/api/chat/messages`** — `ChatRequest` → `ChatResponse`
 
@@ -335,8 +362,46 @@ https://re-view.kr/oauth2/callback?error=server_error
   "answer": "사이즈가 작게 나온다는 의견이 많습니다...",
   "blocked": false,
   "blockReason": null,
-  "usedTokens": 1850
+  "usedTokens": 1850,
+  "quota": {
+    "plan": "FREE",
+    "planName": "무료",
+    "dailyLimit": 5,
+    "usedToday": 1,
+    "remaining": 4,
+    "proAvailable": false,
+    "resetAt": "2026-10-01T15:00:00Z"
+  }
 }
+```
+
+`quota` 는 **이번 턴을 반영한** 값이다. 전송 직후 남은 횟수 표시를 갱신하는 데 그대로 쓸 수 있다.
+
+**POST `/api/chat/pro/messages`** — 요청·응답 형식이 `/api/chat/messages` 와 완전히 같다.
+`PRO` 요금제만 호출할 수 있고, 그 외에는 `403 CHAT_PLAN_REQUIRED` 다. 상위 모델로 더 긴 답변을 받는다.
+
+호출 버튼은 `GET /api/chat/quota` 의 `proAvailable` 로 노출 여부를 판단할 것. 403 을 받고 나서 숨기면 사용자가 실패를 한 번 겪는다.
+
+**GET `/api/chat/quota`** → `ChatQuotaResponse`
+
+LLM 을 부르지 않으므로 빠르고, 쿼터를 깎지 않는다. 채팅 화면 진입 시 한 번 불러
+남은 횟수와 프로 기능 노출 여부를 정하는 용도다.
+
+```json
+{
+  "plan": "PRO", "planName": "프로",
+  "dailyLimit": 300, "usedToday": 12, "remaining": 288,
+  "proAvailable": true, "resetAt": "2026-10-01T15:00:00Z"
+}
+```
+
+`dailyLimit` 과 `remaining` 이 `-1` 이면 무제한을 뜻한다.
+
+**한도 초과 응답** — `429`
+
+```json
+{ "success": false, "errorCode": "CHAT_QUOTA_EXCEEDED",
+  "message": "오늘 사용할 수 있는 챗봇 메시지를 모두 사용했습니다. 요금제를 올리면 더 많이 이용할 수 있습니다." }
 ```
 
 ### 세이프가드 — `blocked` 처리
@@ -395,9 +460,13 @@ https://re-view.kr/oauth2/callback?error=server_error
   "profileImageUrl": null, "role": "USER", "provider": "LOCAL",
   "atiScore": 76.5, "createdAt": "2026-04-01T09:00:00",
   "onboardingCompleted": true, "phone": "010-1234-5678",
-  "interestCategories": ["패션", "뷰티"]
+  "interestCategories": ["패션", "뷰티"],
+  "planTier": "PLUS", "planExpiresAt": "2026-12-31T23:59:59"
 }
 ```
+
+`planTier` 는 **지금 적용 중인** 챗봇 요금제다. 만료가 지난 유료 요금제는 `FREE` 로 내려온다.
+남은 사용량까지 필요하면 `GET /api/chat/quota` 를 쓴다.
 
 **PATCH `/api/users/me`** — `ProfileUpdateRequest` (보낸 필드만 수정)
 
@@ -558,9 +627,26 @@ https://re-view.kr/oauth2/callback?error=server_error
 | GET | `/api/admin/analysis-feedbacks` | 전체 분석 피드백 |
 | PATCH | `/api/admin/analysis-feedbacks/{feedbackId}` | 피드백 검수 |
 | GET | `/api/admin/users` | 회원 목록 |
+| PATCH | `/api/admin/users/{userId}/plan` | 회원 챗봇 요금제 변경 |
 | GET | `/api/admin/model-performance` | AI 모델 성능 통계 |
 
 권한이 없으면 403. JWT 의 `role` 클레임이 `ADMIN` 이어야 한다.
+
+**PATCH `/api/admin/users/{userId}/plan`** — `AdminPlanUpdateRequest` → `AdminUserResponse`
+
+결제 연동 전까지 챗봇 요금제를 부여하는 유일한 경로다.
+
+```json
+{ "planTier": "PLUS", "expiresAt": "2026-12-31T23:59:59" }
+```
+
+| 필드 | 필수 | 설명 |
+|------|------|------|
+| `planTier` | ✅ | `FREE` / `PLUS` / `PRO` |
+| `expiresAt` | | 비우면 무기한. `FREE` 로 내리면 무시되고 비워진다 |
+
+- 변경은 **즉시** 반영된다. 요금제는 JWT 가 아니라 DB 값이라 재로그인이 필요 없다.
+- 응답의 `planTier` 는 **저장된 값**이다. 만료가 지나 `FREE` 로 동작 중이어도 원래 등급이 그대로 보이므로, 만료 여부는 `planExpiresAt` 으로 판단한다. (사용자용 `GET /api/users/me` 는 반대로 지금 적용 중인 등급을 준다)
 
 ---
 

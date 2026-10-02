@@ -8,6 +8,8 @@ import com.example.fireview.domain.admin.dto.response.AdminModelPerformanceRespo
 import com.example.fireview.domain.admin.dto.response.AdminModelPerformanceResponse.UserAgreementStats;
 import com.example.fireview.domain.admin.dto.response.AdminReviewResponse;
 import com.example.fireview.domain.admin.dto.response.AdminUserResponse;
+import com.example.fireview.domain.user.entity.PlanTier;
+import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.feedback.dto.response.AnalysisFeedbackResponse;
 import com.example.fireview.domain.feedback.entity.AnalysisFeedback;
 import com.example.fireview.domain.feedback.entity.AnalysisFeedbackStatus;
@@ -26,6 +28,7 @@ import com.example.fireview.domain.user.repository.UserRepository;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -144,6 +148,22 @@ public class AdminService {
 
     public Page<AdminUserResponse> getAllUsers(Pageable pageable) {
         return userRepository.findAll(pageable).map(AdminUserResponse::from);
+    }
+
+    /**
+     * 유저의 챗봇 요금제를 바꾼다.
+     *
+     * <p>결제 연동이 없는 동안 요금제를 부여할 유일한 경로다. 결제가 붙으면
+     * 결제 서비스가 같은 {@code User#changePlan} 을 호출하고 이 API 는
+     * 운영자 보정용으로 남는다.
+     */
+    @Transactional
+    public AdminUserResponse updateUserPlan(Long userId, PlanTier planTier, LocalDateTime expiresAt) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+        user.changePlan(planTier, expiresAt);
+        log.info("[Admin] 요금제 변경 - userId={}, plan={}, expiresAt={}", userId, planTier, expiresAt);
+        return AdminUserResponse.from(user);
     }
 
     // ── 모델 성능 모니터링 ─────────────────────────────────────────────────────

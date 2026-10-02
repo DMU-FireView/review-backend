@@ -1,6 +1,7 @@
 package com.example.fireview.domain.admin.controller;
 
 import com.example.fireview.domain.admin.dto.request.AdminFeedbackReviewRequest;
+import com.example.fireview.domain.admin.dto.request.AdminPlanUpdateRequest;
 import com.example.fireview.domain.admin.dto.request.AdminReportStatusUpdateRequest;
 import com.example.fireview.domain.admin.dto.response.AdminDashboardResponse;
 import com.example.fireview.domain.admin.dto.response.AdminModelPerformanceResponse;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -81,6 +83,24 @@ public class AdminController {
             @Valid @RequestBody AdminFeedbackReviewRequest request) {
         return ApiResponse.success("피드백 검수가 완료되었습니다.",
                 adminService.reviewFeedback(feedbackId, request.status(), request.adminComment()));
+    }
+
+    /** PATCH /api/admin/users/{userId}/plan — 유저 챗봇 요금제 변경 */
+    @Operation(summary = "유저 요금제 변경", description = """
+            결제 연동 전까지 요금제를 부여하는 유일한 경로다.
+
+            `expiresAt` 을 비우면 무기한이다. `planTier=FREE` 로 내리면 `expiresAt` 은 무시되고 비워진다.
+            만료가 지난 유료 요금제는 저장된 값은 그대로 두고 동작만 FREE 로 떨어진다.
+            목록·상세의 `planTier` 는 **저장된 값**이라 만료 여부는 `planExpiresAt` 으로 판단할 것.
+
+            변경은 즉시 반영된다. 요금제는 JWT 가 아니라 DB 값이라 재로그인이 필요 없다.
+            """)
+    @PatchMapping("/users/{userId}/plan")
+    public ApiResponse<AdminUserResponse> updateUserPlan(
+            @PathVariable Long userId,
+            @Valid @RequestBody AdminPlanUpdateRequest request) {
+        return ApiResponse.success("요금제가 변경되었습니다.",
+                adminService.updateUserPlan(userId, request.planTier(), request.expiresAt()));
     }
 
     /** GET /api/admin/users — 전체 유저 목록 */

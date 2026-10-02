@@ -1,6 +1,7 @@
 package com.example.fireview.domain.admin.dto.response;
 
 import com.example.fireview.domain.user.entity.OAuthProvider;
+import com.example.fireview.domain.user.entity.PlanTier;
 import com.example.fireview.domain.user.entity.Role;
 import com.example.fireview.domain.user.entity.User;
 
@@ -13,7 +14,9 @@ public record AdminUserResponse(
         Role role,
         OAuthProvider provider,
         Double atiScore,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        PlanTier planTier,
+        LocalDateTime planExpiresAt
 ) {
     public static AdminUserResponse from(User user) {
         return new AdminUserResponse(
@@ -23,7 +26,11 @@ public record AdminUserResponse(
                 user.getRole(),
                 user.getProvider(),
                 user.getAtiScore(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                // 저장된 값 그대로 준다. 만료돼 FREE 로 동작 중인 상태도 운영자는
+                // 원래 등급과 만료 시각을 봐야 환불·연장을 판단할 수 있다.
+                user.getPlanTier(),
+                user.getPlanExpiresAt()
         );
     }
 }
