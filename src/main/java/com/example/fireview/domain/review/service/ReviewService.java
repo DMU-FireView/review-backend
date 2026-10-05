@@ -5,6 +5,9 @@ import com.example.fireview.domain.product.repository.ProductRepository;
 import com.example.fireview.domain.review.dto.FeedbackHistoryResponse;
 import com.example.fireview.domain.review.dto.ReviewFeedbackRequest;
 import com.example.fireview.domain.review.dto.ReviewResponse;
+import com.example.fireview.domain.dataserver.DataServerProductKey;
+import com.example.fireview.domain.dataserver.service.DataProductTagService;
+import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.ReviewFeedback;
 import com.example.fireview.domain.review.repository.ReviewFeedbackRepository;
@@ -28,6 +31,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final ReviewFeedbackRepository feedbackRepository;
+    private final DataProductTagService dataProductTagService;
     private final ProductRepository productRepository;
     private final UserService userService;
     private final AtiService atiService;
@@ -71,6 +75,32 @@ public class ReviewService {
                 .feedbackType(request.feedbackType())
                 .build();
         feedbackRepository.save(feedback);
+    }
+
+    /**
+     * Data 서버 리뷰에 대한 피드백.
+     *
+     * <p>Spring DB 에 리뷰 행이 없으므로 상품 번호표와 리뷰 ID 만 붙잡는다.
+     * 수집 전 상품이면 번호표 발급이 거절되어 피드백도 들어가지 않는다.
+     */
+    @Transactional
+    public void submitExternalFeedback(String platform, String productId, String externalReviewId,
+                                       String userEmail, ReviewFeedbackRequest request) {
+        User user = userService.findByEmail(userEmail);
+        Product product = dataProductTagService.resolveOrCreate(
+                new DataServerProductKey(platform, productId));
+
+        if (feedbackRepository.existsByUser_IdAndProduct_IdAndExternalReviewId(
+                user.getId(), product.getId(), externalReviewId)) {
+            throw new CustomException(ErrorCode.FEEDBACK_ALREADY_EXISTS);
+        }
+
+        feedbackRepository.save(ReviewFeedback.builder()
+                .product(product)
+                .externalReviewId(externalReviewId)
+                .user(user)
+                .feedbackType(request.feedbackType())
+                .build());
     }
 
     /** 내가 제출한 피드백 목록 조회 */
