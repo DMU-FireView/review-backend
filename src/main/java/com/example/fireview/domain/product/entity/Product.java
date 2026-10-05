@@ -32,14 +32,26 @@ public class Product {
 
     private Long price;
 
+    /**
+     * 카테고리. Data 서버에서 온 상품은 비어 있을 수 있다.
+     *
+     * <p>Data 서버의 category 는 "뷰티 인디 > 인디 스킨케어 > 인디 마스크/팩" 같은
+     * 자유 문자열이라 이 enum 으로 안전하게 옮길 수 없다. 억지로 끼워 맞추면
+     * 화면에 엉뚱한 분류가 뜬다. 분류가 필요해질 때 매핑을 따로 만든다.
+     */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
     private Category category;
 
     @Column(nullable = false)
     private String platform;
 
-    @Column(nullable = false)
+    /**
+     * 상품 평균 RTI. <b>분석 전이면 null 이다.</b>
+     *
+     * <p>Data 서버는 원본 수집만 소유하고 신뢰도 분석을 주지 않는다. 값이 없을 때
+     * 0 이나 50 같은 기본값을 넣으면 화면이 그 수치를 실제 분석 결과처럼 보여준다.
+     * 모른다는 것은 모른다고 두는 편이 맞다.
+     */
     private Double avgRti;
 
     private Integer reviewCount;
@@ -104,7 +116,9 @@ public class Product {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         if (platform == null) platform = "NAVER";
-        if (avgRti == null) avgRti = 50.0;
+        // avgRti 는 채우지 않는다. 예전에는 NOT NULL 이라 50.0 을 넣었는데, 그러면 분석도
+        // 하지 않은 상품에 신뢰도 50점이 붙어 화면이 그 수치를 실제 분석 결과처럼 보여준다.
+        // 모르는 값은 null 로 둔다.
         if (reviewCount == null) reviewCount = 0;
         if (avgRating == null) avgRating = 0.0;
     }
