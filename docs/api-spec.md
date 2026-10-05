@@ -128,6 +128,8 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 | `EXPIRED_RESET_TOKEN` | 400 | 만료된 재설정 토큰 |
 | `UNAUTHORIZED` | 401 | 로그인 필요 |
 | `PRODUCT_NOT_FOUND` | 404 | 상품 없음 |
+| `PRODUCT_NOT_COLLECTED` | 409 | Data 서버가 아직 상품을 수집하지 못함 |
+| `DATA_SERVER_UNAVAILABLE` | 503 | Data 서버에 연결 실패 |
 | `REVIEW_NOT_FOUND` | 404 | 리뷰 없음 |
 | `FEEDBACK_ALREADY_EXISTS` | 409 | 이미 피드백 제출함 |
 | `FEEDBACK_NOT_FOUND` | 404 | 피드백 내역 없음 |
@@ -334,6 +336,7 @@ Data 서버는 사유가 없으면 `"reasons": []` 를 그대로 줍니다. 그�
 | Method | Path | 설명 |
 |--------|------|------|
 | GET | `/api/v2/products/{platform}/{productId}` | 상품 상세 + 리뷰 (Data 서버) |
+| POST | `/api/v2/products/{platform}/{productId}/tag` | 번호표 발급 (찜·장바구니 연결, **인증 필요**) |
 | GET | `/api/v2/products/collection-jobs/{jobId}` | 수집 job 상태 |
 
 기존 `/api/products/**` 와 **병행 운영**한다. 한 번에 바꾸면 되돌릴 수 없으므로 화면 단위로 옮긴다.
@@ -379,6 +382,35 @@ Data 서버가 `(platform, productId)` 로 상품을 가리키므로 프론트�
 - **`springProductId` 는 null 일 수 있다.** 찜·장바구니에 쓸 Spring 쪽 번호인데, 아직 아무도 찜하지 않은 상품은 번호가 없다. 열어보기만 해도 번호를 만들면 빈 행이 계속 쌓이므로 그렇게 하지 않는다.
 - **`analysis` 는 현재 항상 null 이다.** 신뢰도 분석(RTI·등급·사유)은 Data 서버도 AI 서버도 아직 제공하지 않는다. 자리만 잡아둔 것이다.
 - 리뷰는 **cursor 페이지네이션**이다. `reviews.nextCursor` 를 다음 요청의 `?cursor=` 에 그대로 넣는다. null 이면 마지막 페이지다.
+
+**POST `/api/v2/products/{platform}/{productId}/tag`** — **인증 필요**
+
+Data 서버 상품을 **찜·장바구니에 쓸 수 있는 Spring 상품 번호**로 바꾼다.
+찜·장바구니 API 는 Spring 의 `productId`(Long)를 받으므로 그 사이를 잇는 변환점이다.
+
+```
+1. 찜 버튼 클릭
+2. POST /api/v2/products/kurly/1000146248/tag  →  { "springProductId": 1234, ... }
+3. POST /api/wishlist/1234                      (기존 API 그대로)
+```
+
+```json
+{ "springProductId": 1234, "externalId": "kurly-1000146248", "name": "토리든 마스크팩" }
+```
+
+- **여러 번 불러도 안전하다.** 같은 상품이면 늘 같은 번호가 나온다
+- 상품 상세 응답의 `springProductId` 가 이미 있으면 **이 호출을 건너뛴다**
+- 이미 번호가 있으면 Data 서버를 부르지 않아 빠르다
+
+| 응답 | 상황 |
+|---|---|
+| `200` | 발급 완료 |
+| `409 PRODUCT_NOT_COLLECTED` | 아직 수집 전. 수집이 끝나야 번호를 줄 수 있다 |
+| `503 DATA_SERVER_UNAVAILABLE` | Data 서버에 닿지 못함 |
+
+`409` 는 **상품이 없다는 뜻이 아니다.** 상세 조회로 `job` 상태를 보고 수집이 끝난 뒤 다시 부른다.
+
+> 찜·장바구니 목록에서 분석 전 상품은 `categoryDisplayName` · `avgRti` · `rtiGrade` · `rtiColor` 가 **null 로 내려온다.**
 
 **GET `/api/v2/products/collection-jobs/{jobId}`**
 
