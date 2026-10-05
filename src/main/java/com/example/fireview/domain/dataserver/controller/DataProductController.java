@@ -1,7 +1,9 @@
 package com.example.fireview.domain.dataserver.controller;
 
+import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.response.DataProductResponse;
 import com.example.fireview.domain.dataserver.service.DataProductService;
+import com.example.fireview.domain.dataserver.service.DataProductTagService;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
 import com.example.fireview.global.response.ApiResponse;
@@ -23,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class DataProductController {
 
     private final DataProductService dataProductService;
+    private final DataProductTagService dataProductTagService;
 
     /**
      * 상품 상세 + 리뷰 첫 페이지
@@ -68,6 +71,54 @@ public class DataProductController {
         }
         return ApiResponse.success(dataProductService.getProduct(platform, productId, cursor));
     }
+
+    /**
+     * 번호표 발급 (찜·장바구니 연결용)
+     * POST /api/v2/products/{platform}/{productId}/tag
+     */
+    @Operation(summary = "번호표 발급", description = """
+            Data 서버 상품을 **찜·장바구니에 쓸 수 있는 Spring 상품 번호**로 바꾼다.
+
+            찜·장바구니 API 는 Spring 의 `productId`(Long)를 받는데, Data 서버 상품은
+            `(platform, productId)` 로 식별된다. 그 사이를 잇는 번호를 여기서 발급한다.
+
+            **흐름**
+            1. 사용자가 찜 버튼을 누른다
+            2. `POST /api/v2/products/kurly/1000146248/tag` → `{ "springProductId": 1234 }`
+            3. 기존 `POST /api/wishlist/1234` 호출
+
+            **여러 번 불러도 안전하다.** 같은 상품이면 늘 같은 번호가 나온다.
+            이미 번호가 있으면 Data 서버를 부르지 않아 빠르다.
+
+            상품 상세 응답의 `springProductId` 가 이미 있으면 이 호출을 건너뛰어도 된다.
+
+            | 응답 | 상황 |
+            |---|---|
+            | `200` | 발급 완료 |
+            | `409 PRODUCT_NOT_COLLECTED` | 아직 수집 전. 수집이 끝나야 번호를 줄 수 있다 |
+            | `503 DATA_SERVER_UNAVAILABLE` | Data 서버에 닿지 못함 |
+
+            `409` 는 상품이 없다는 뜻이 **아니다.** 상세 조회로 `job` 을 확인하고
+            수집이 끝난 뒤 다시 부르면 된다.
+            """)
+    @PostMapping("/{platform}/{productId}/tag")
+    public ApiResponse<ProductTagResponse> issueTag(
+            @PathVariable String platform,
+            @PathVariable String productId) {
+
+        if (platform.isBlank() || productId.isBlank()) {
+            throw new CustomException(ErrorCode.INVALID_INPUT);
+        }
+        var product = dataProductTagService.resolveOrCreate(
+                new DataServerProductKey(platform, productId));
+        return ApiResponse.success("번호표가 발급되었습니다.",
+                new ProductTagResponse(product.getId(), product.dataServerExternalId(), product.getName()));
+    }
+
+    /**
+     * @param springProductId 찜·장바구니 API 에 그대로 넣는 값
+     */
+    public record ProductTagResponse(Long springProductId, String externalId, String name) {}
 
     /**
      * 수집 job 상태

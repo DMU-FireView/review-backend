@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -75,6 +76,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/landing/**").permitAll()
                         .requestMatchers("/api/products/**").permitAll()
+                        // 번호표 발급은 DB 에 행을 만든다. 비로그인에 열어두면 빈 행이 양산된다.
+                        // 더 좁은 규칙이 먼저 와야 아래 permitAll 에 먹히지 않는다.
+                        .requestMatchers(HttpMethod.POST, "/api/v2/products/**").authenticated()
                         // Data 서버 기반 상품 조회(v2). 기존 /api/products 와 같은 공개 범위
                         .requestMatchers("/api/v2/products/**").permitAll()
                         .requestMatchers("/api/dashboard/**").permitAll()
