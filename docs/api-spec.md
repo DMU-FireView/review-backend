@@ -329,6 +329,72 @@ Data 서버는 사유가 없으면 `"reasons": []` 를 그대로 줍니다. 그�
 
 ---
 
+## 6-2. 상품 (Data 서버) — `/api/v2/products` — 인증 불필요
+
+| Method | Path | 설명 |
+|--------|------|------|
+| GET | `/api/v2/products/{platform}/{productId}` | 상품 상세 + 리뷰 (Data 서버) |
+| GET | `/api/v2/products/collection-jobs/{jobId}` | 수집 job 상태 |
+
+기존 `/api/products/**` 와 **병행 운영**한다. 한 번에 바꾸면 되돌릴 수 없으므로 화면 단위로 옮긴다.
+
+`platform` 은 Data 서버 수집기 이름(소문자): `naver` `kurly` `elevenst` `ably` `auction` `gmarket` `musinsa` `ohouse` `oliveyoung`.
+Data 서버가 `(platform, productId)` 로 상품을 가리키므로 프론트도 둘을 함께 들고 다녀야 한다.
+
+### `collectionStatus` 로 화면을 가른다
+
+이 값을 무시하면 사용자가 빈 화면을 보고 고장났다고 느낀다. **전부 HTTP 200 이다.**
+
+| 값 | `product` | 화면 |
+|---|---|---|
+| `FRESH` | 있음 | 그대로 표시 |
+| `STALE` | 있음 | 그대로 표시 (+ "갱신 중" 정도) |
+| `QUEUED` | **null** | 로딩 화면. `job.id` 로 완료를 기다린다 |
+| `UNAVAILABLE` | **null** | 오류 안내. 상품이 없는 게 아니라 **못 가져온** 것 |
+
+- **처음 보는 상품은 반드시 `QUEUED` 를 한 번 거친다.** Data 서버가 그때 수집을 시작한다. 로딩 화면 없이 바로 열면 빈 화면이 된다.
+- `STALE` 은 실패가 아니다. 쓸 수 있는 데이터가 들어 있고, 최신을 기다리면 화면이 크롤링 속도에 묶인다.
+
+```json
+{
+  "collectionStatus": "FRESH",
+  "springProductId": 42,
+  "product": {
+    "platform": "kurly", "productId": "1000146248", "externalId": "kurly-1000146248",
+    "name": "샘플 상품", "url": "https://kurly.com/p", "brand": "브랜드",
+    "price": 29900, "thumbnailUrl": "https://img", "category": "식품 > 간편식",
+    "reviewCount": 128, "rating": 4.5, "lastCollectedAt": "2026-10-05T00:00:00+09:00"
+  },
+  "reviews": {
+    "items": [{ "reviewId": "r-1", "content": "맛있어요", "rating": 5.0,
+                "author": "user**", "writtenAt": "2026-10-01T10:00:00+09:00",
+                "option": "옵션", "images": [], "helpfulCount": 3 }],
+    "nextCursor": "eyJ3cml0..."
+  },
+  "job": null,
+  "analysis": null
+}
+```
+
+- **`springProductId` 는 null 일 수 있다.** 찜·장바구니에 쓸 Spring 쪽 번호인데, 아직 아무도 찜하지 않은 상품은 번호가 없다. 열어보기만 해도 번호를 만들면 빈 행이 계속 쌓이므로 그렇게 하지 않는다.
+- **`analysis` 는 현재 항상 null 이다.** 신뢰도 분석(RTI·등급·사유)은 Data 서버도 AI 서버도 아직 제공하지 않는다. 자리만 잡아둔 것이다.
+- 리뷰는 **cursor 페이지네이션**이다. `reviews.nextCursor` 를 다음 요청의 `?cursor=` 에 그대로 넣는다. null 이면 마지막 페이지다.
+
+**GET `/api/v2/products/collection-jobs/{jobId}`**
+
+`QUEUED` 를 받았을 때 완료를 기다린다. 폴링 간격은 2~3초를 권한다 (크롤링이라 수 초~수십 초).
+
+```json
+{ "id": 9, "status": "partial", "productStatus": "succeeded",
+  "reviewStatus": "failed", "lastError": "타임아웃" }
+```
+
+`status` 가 `succeeded` 또는 `partial` 이 되면 상품 상세를 다시 호출한다.
+`partial` 은 상품만 수집되고 리뷰가 실패한 상태 — 상품은 보여줄 수 있다.
+`failed` 면 재시도해도 같을 가능성이 높으므로 `lastError` 를 안내한다.
+
+---
+
 ## 7. 챗봇 (`/api/chat`) — **인증 필요**
 
 | Method | Path | 설명 |
