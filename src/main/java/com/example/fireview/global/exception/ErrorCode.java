@@ -14,6 +14,8 @@ public enum ErrorCode {
 
     // Product
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),
+    PRODUCT_NOT_COLLECTED(HttpStatus.CONFLICT, "상품 정보를 아직 수집하지 못했습니다. 잠시 후 다시 시도해주세요."),
+    DATA_SERVER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "상품 정보 서버에 연결할 수 없습니다. 잠시 후 다시 시도해주세요."),
 
     // Review
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),

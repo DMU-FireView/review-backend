@@ -36,6 +36,12 @@ public class ProductTagRegistry {
 
     private final ProductRepository productRepository;
 
+    /** 이미 붙어 있는 번호표만 찾는다. 만들지 않는다 */
+    @Transactional(readOnly = true)
+    public java.util.Optional<Product> find(DataServerProductKey key) {
+        return productRepository.findByDataPlatformAndDataProductId(key.platform(), key.productId());
+    }
+
     /**
      * 번호표를 찾고, 없으면 만든다.
      *
