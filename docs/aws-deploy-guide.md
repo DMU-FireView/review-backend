@@ -504,16 +504,25 @@ Actions 탭 → **CD - Deploy to EC2** → **Run workflow** (수동 실행)
 **Google Cloud Console** → API 및 서비스 → 사용자 인증 정보 → OAuth 2.0 클라이언트 ID → 승인된 리디렉션 URI:
 
 ```
-https://api.도메인.kr/login/oauth2/code/google
+https://도메인.kr/login/oauth2/code/google
 ```
 
 **네이버 개발자센터** → 내 애플리케이션 → API 설정 → Callback URL:
 
 ```
-https://api.도메인.kr/login/oauth2/code/naver
+https://도메인.kr/login/oauth2/code/naver
 ```
 
-경로는 `application.properties`의 `redirect-uri={baseUrl}/login/oauth2/code/naver` 설정에서 나온 것이라 **한 글자도 달라선 안 된다.**
+경로는 `application-prod.properties`의 `redirect-uri` 설정에서 나온 것이라 **한 글자도 달라선 안 된다.**
+
+> ⚠️ **호스트는 API 도메인이 아니라 프론트 도메인이다.** 인가 요청 때 내려가는 state
+> 쿠키(`oauth2_auth_request`)에는 Domain 속성이 없어 브라우저가 요청한 호스트에만
+> 저장된다. 사용자는 프론트를 통해 들어오므로 콜백도 같은 호스트로 받아야 쿠키가
+> 전달된다. API 도메인으로 받으면 쿠키가 안 실려 로그인이 통째로 실패한다.
+>
+> 그래서 `{baseUrl}` 을 쓰지 않는다. 프론트 프록시가 Host 를 API 도메인으로 바꿔
+> 넘기기 때문에 `{baseUrl}` 이 API 도메인으로 풀린다. 고정값으로 박아야 한다.
+> 프론트에 `/login/oauth2/**` 를 백엔드로 넘기는 rewrite 가 있어야 동작한다.
 
 ---
 
