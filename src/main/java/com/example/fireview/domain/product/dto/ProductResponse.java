@@ -66,10 +66,10 @@ public record ProductResponse(
                 name,
                 item.image(),
                 price,
-                category.getMajor(),
-                category.getMajor().getDisplayName(),
+                category == null ? null : category.getMajor(),
+                category == null ? null : category.getMajor().getDisplayName(),
                 category,
-                category.getDisplayName(),
+                category == null ? null : category.getDisplayName(),
                 item.category3(),               // 소분류
                 item.mallName().isBlank() ? "NAVER" : item.mallName(),
                 50.0,                           // RTI 미분석 기본값
@@ -85,8 +85,20 @@ public record ProductResponse(
         );
     }
 
+    /**
+     * DB 상품 → 응답 변환.
+     *
+     * <p><b>분석 전 상품을 허용한다.</b> Data 서버에서 온 상품은 신뢰도 분석이 없어
+     * {@code avgRti} 가 null 이고, 카테고리 문자열을 enum 으로 옮길 수 없어
+     * {@code category} 도 null 일 수 있다. 예전처럼 기본값을 끼워 넣지 않는다 —
+     * 없는 분석 결과를 숫자로 보여주면 사용자가 그걸 실제 판정으로 읽는다.
+     * 관련 필드는 그대로 null 로 내려가고, 프론트가 "분석 전"으로 그린다.
+     */
     public static ProductResponse from(Product product) {
-        TrustGrade grade = TrustGrade.fromScore(product.getAvgRti());
+        // avgRti 가 null 이면 등급도 없다. Double 언박싱 NPE 를 막는 것이기도 하다
+        TrustGrade grade = product.getAvgRti() == null
+                ? null
+                : TrustGrade.fromScore(product.getAvgRti());
         List<PlatformLinkDto> platformDtos = product.getPlatformLinks().stream()
                 .map(PlatformLinkDto::from)
                 .toList();
@@ -97,16 +109,16 @@ public record ProductResponse(
                 product.getName(),
                 product.getImageUrl(),
                 product.getPrice(),
-                category.getMajor(),
-                category.getMajor().getDisplayName(),
+                category == null ? null : category.getMajor(),
+                category == null ? null : category.getMajor().getDisplayName(),
                 category,
-                category.getDisplayName(),
+                category == null ? null : category.getDisplayName(),
                 product.getSubCategory(),
                 product.getPlatform(),
                 product.getAvgRti(),
                 grade,
-                grade.toLevel(),
-                grade.getColor(),
+                grade == null ? null : grade.toLevel(),
+                grade == null ? null : grade.getColor(),
                 product.getReviewCount(),
                 product.getAvgRating(),
                 platformDtos,
