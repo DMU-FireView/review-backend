@@ -1,5 +1,7 @@
 package com.example.fireview.domain.ai.dto.response;
 
+import com.example.fireview.global.response.ReasonMessages;
+
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -10,6 +12,8 @@ import java.util.stream.Collectors;
  * - input_features (AI 내부 디버그 필드) 제거
  * - null 기본값 보장
  * - 사유(reasons)는 메시지 문자열 목록으로 정제
+ *   Data 서버가 빈 배열을 주면 안내 문구 한 줄로 바꿔 내려간다
+ *   ({@link ReasonMessages#orPlaceholder}). 비어 있으면 화면에 빈 칸이 남는다.
  */
 public record ReviewAnalysisDto(
 
@@ -22,7 +26,7 @@ public record ReviewAnalysisDto(
         Integer textScore,     // 텍스트 진정성 점수
         Integer behaviorScore, // 작성자 행동 패턴 점수
         Integer networkScore,  // 네트워크 군집 점수
-        List<String> reasons   // 판정 사유 메시지 목록
+        List<String> reasons   // 판정 사유 메시지 목록. 비는 일이 없다(없으면 안내 문구 1건)
 
 ) {
     /** risk-report sample_reviews 기반으로 content/author/date 포함 DTO 생성 */
@@ -49,7 +53,7 @@ public record ReviewAnalysisDto(
                 result != null && result.signals() != null ? result.signals().text() : null,
                 result != null && result.signals() != null ? result.signals().behavior() : null,
                 result != null && result.signals() != null ? result.signals().network() : null,
-                reasonMessages
+                ReasonMessages.orPlaceholder(reasonMessages)
         );
     }
 
@@ -70,7 +74,7 @@ public record ReviewAnalysisDto(
                 result.signals() != null ? result.signals().text() : null,
                 result.signals() != null ? result.signals().behavior() : null,
                 result.signals() != null ? result.signals().network() : null,
-                reasonMessages
+                ReasonMessages.orPlaceholder(reasonMessages)
         );
     }
 }

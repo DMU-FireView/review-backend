@@ -2,6 +2,7 @@ package com.example.fireview.domain.review.dto;
 
 import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
+import com.example.fireview.global.response.ReasonMessages;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,6 +15,8 @@ import java.util.List;
  *   대신 등급(trustGrade)과 레이블(위험/불안/안전)만 표시합니다.
  * - RTI 수치는 상품 단위(ProductResponse.avgRti)에서만 노출합니다.
  * - reviewerAtiScore: 리뷰 작성자 계정의 신뢰도 점수 (ATI, nullable)
+ * - reasons: 저장된 사유가 없으면 안내 문구 한 줄로 바꿔 내보냅니다.
+ *   DB 에는 빈 목록 그대로 남습니다 ({@link ReasonMessages} 참고).
  */
 public record ReviewResponse(
         Long id,
@@ -46,7 +49,7 @@ public record ReviewResponse(
                 review.getTrustGrade(),
                 review.getTrustGrade().getLabel(),
                 review.getTrustGrade().getColor(),
-                review.getReasons(),
+                ReasonMessages.orPlaceholder(review.getReasons()),
                 review.getWrittenAt(),
                 review.getIsVerifiedPurchase(),
                 atiScore
