@@ -12,6 +12,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,6 +28,30 @@ public class ReviewController {
      * 리뷰 피드백 제출
      * POST /api/reviews/{reviewId}/feedback
      */
+    @Operation(summary = "리뷰 피드백 (Data 서버 리뷰)", description = """
+            `/api/v2/products/**` 로 조회한 리뷰에 '실제/가짜' 피드백을 남긴다.
+            리뷰 ID 는 쇼핑몰이 발급한 원본 값(`reviews.items[].reviewId`)을 그대로 넣는다.
+
+            상품 번호표가 없으면 이 호출에서 발급된다. 수집 전 상품이면
+            `409 PRODUCT_NOT_COLLECTED` 로 거절된다.
+
+            같은 리뷰에 두 번 남기면 `409 FEEDBACK_ALREADY_EXISTS` 다.
+
+            피드백 내역 조회(`/api/reviews/feedbacks/me`)에서 Data 서버 리뷰는
+            `reviewId` 와 본문 요약이 null 로 내려온다. 본문을 저장하지 않기 때문이다.
+            """)
+    @PostMapping("/external/{platform}/{productId}/reviews/{externalReviewId}/feedback")
+    public ApiResponse<Void> submitExternalFeedback(
+            @PathVariable String platform,
+            @PathVariable String productId,
+            @PathVariable String externalReviewId,
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody ReviewFeedbackRequest request) {
+        reviewService.submitExternalFeedback(platform, productId, externalReviewId,
+                jwt.getSubject(), request);
+        return ApiResponse.ok("피드백이 제출되었습니다.");
+    }
+
     @PostMapping("/{reviewId}/feedback")
     public ApiResponse<Void> submitFeedback(
             @PathVariable Long reviewId,
