@@ -22,4 +22,12 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     List<Product> findRiskyProducts(double threshold);
 
     Optional<Product> findByNaverProductId(String naverProductId);
+
+    /**
+     * Data 서버 주소로 Spring 쪽 상품을 찾는다.
+     *
+     * <p>Data 서버는 {@code (platform, product_id)} 복합키를 쓰는데 찜·장바구니·조회이력은
+     * Spring 의 Long id 를 FK 로 물고 있다. 이 조회가 그 사이를 잇는 번호표 역할을 한다.
+     */
+    Optional<Product> findByDataPlatformAndDataProductId(String dataPlatform, String dataProductId);
 }
