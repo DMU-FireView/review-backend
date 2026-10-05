@@ -265,6 +265,22 @@ https://re-view.kr/oauth2/callback?error=server_error
 }
 ```
 
+**`reasons` 는 절대 빈 배열로 내려가지 않습니다.** 판정 사유가 없으면 안내 문구
+한 건이 대신 들어갑니다.
+
+```json
+{ "reasons": ["추가로 표시할 세부 사유가 없습니다."] }
+```
+
+Data 서버는 사유가 없으면 `"reasons": []` 를 그대로 줍니다. 그건 근거 **코드**
+배열이라 안내 문장을 섞으면 저장·집계할 때 다시 갈라내야 하기 때문입니다.
+문장은 Spring 이 응답을 만드는 시점에만 끼웁니다. DB 에는 빈 목록 그대로 남습니다.
+
+프론트에서 `reasons.isEmpty()` 분기를 따로 둘 필요가 없습니다. 길이가 늘
+1 이상이므로 그대로 그리면 됩니다. 단, 관리자 API(`/api/admin/reviews/suspicious`)
+는 이 보정을 하지 않습니다 — 운영자는 사유가 실제로 없는 것인지 봐야 하므로
+빈 배열이 그대로 내려갑니다.
+
 **`DashboardResponse`**
 
 ```json
@@ -306,6 +322,8 @@ https://re-view.kr/oauth2/callback?error=server_error
   "trustSignals": [{ "label": "작성일 편중", "value": "동일 날짜 32건", "isPositive": false }]
 }
 ```
+
+`reviews[].reasons` 도 위와 같습니다. 비어 있으면 안내 문구 한 건이 들어갑니다.
 
 > ⚠️ 이 엔드포인트는 Data 서버 연동 후 제거될 예정이다. 신규 화면은 Data 서버 API 를 쓴다.
 
