@@ -75,6 +75,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/landing/**").permitAll()
                         .requestMatchers("/api/products/**").permitAll()
+                        // Data 서버 기반 상품 조회(v2). 기존 /api/products 와 같은 공개 범위
+                        .requestMatchers("/api/v2/products/**").permitAll()
                         .requestMatchers("/api/dashboard/**").permitAll()
                         .requestMatchers("/api/search/**").permitAll()
                         .requestMatchers("/api/keywords/**").permitAll()
