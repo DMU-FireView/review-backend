@@ -15,6 +15,10 @@ public interface ReviewFeedbackRepository extends JpaRepository<ReviewFeedback, 
 
     boolean existsByReview_IdAndUser_Id(Long reviewId, Long userId);
 
+    /** Data 서버 리뷰 중복 피드백 검사. 상품이 달라도 리뷰 ID 가 겹칠 수 있어 상품까지 본다 */
+    boolean existsByUser_IdAndProduct_IdAndExternalReviewId(
+            Long userId, Long productId, String externalReviewId);
+
     /** 내가 제출한 피드백 목록 (리뷰+상품 JOIN FETCH, 최신순) */
     @Query("SELECT f FROM ReviewFeedback f "
          + "JOIN FETCH f.review r "

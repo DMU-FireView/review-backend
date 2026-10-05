@@ -15,6 +15,10 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
     /** 특정 사용자가 특정 리뷰를 이미 신고했는지 확인 */
     boolean existsByReporter_IdAndReview_Id(Long reporterId, Long reviewId);
 
+    /** Data 서버 리뷰 중복 신고 검사. 상품이 달라도 리뷰 ID 가 겹칠 수 있어 상품까지 본다 */
+    boolean existsByReporter_IdAndProduct_IdAndExternalReviewId(
+            Long reporterId, Long productId, String externalReviewId);
+
     /** 내가 신고한 목록 (최신순) */
     @Query("SELECT r FROM Report r JOIN FETCH r.review rv JOIN FETCH rv.product "
          + "WHERE r.reporter.id = :userId ORDER BY r.createdAt DESC")

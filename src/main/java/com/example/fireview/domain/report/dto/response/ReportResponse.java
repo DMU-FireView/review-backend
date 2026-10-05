@@ -20,14 +20,23 @@ public record ReportResponse(
         String statusDescription,
         String adminComment,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        // Data 서버 리뷰 신고일 때만 채워진다
+        String externalReviewId,
+        String productExternalId
 ) {
+    /**
+     * <p>Data 서버 리뷰 신고는 {@code reviewId} 와 {@code reviewContent} 가 null 이다.
+     * Spring DB 에 그 리뷰 행이 없고 본문도 복사해 두지 않는다.
+     * 대신 {@code externalReviewId} 와 {@code productExternalId} 로 찾아간다.
+     */
     public static ReportResponse from(Report report) {
         return new ReportResponse(
                 report.getId(),
-                report.getReview().getId(),
-                report.getReview().getContent(),
-                report.getReview().getProduct().getName(),
+                report.reviewIdOrNull(),
+                report.reviewContentOrNull(),
+                report.productNameOrNull(),
                 report.getReason(),
                 report.getReason().getDescription(),
                 report.getDetail(),
@@ -37,7 +46,9 @@ public record ReportResponse(
                 report.getStatus().getDescription(),
                 report.getAdminComment(),
                 report.getCreatedAt(),
-                report.getUpdatedAt()
+                report.getUpdatedAt(),
+                report.getExternalReviewId(),
+                report.productExternalIdOrNull()
         );
     }
 }

@@ -21,16 +21,16 @@ public record ReportSummaryResponse(
         LocalDateTime createdAt
 ) {
     public static ReportSummaryResponse from(Report report) {
-        String content = report.getReview().getContent();
+        String content = report.reviewContentOrNull();
         String summary = (content != null && content.length() > 50)
                 ? content.substring(0, 50) + "..."
                 : content;
 
         return new ReportSummaryResponse(
                 report.getId(),
-                report.getReview().getId(),
+                report.reviewIdOrNull(),
                 summary,
-                report.getReview().getProduct().getName(),
+                report.productNameOrNull(),
                 report.getReason(),
                 report.getReason().getDescription(),
                 report.getStatus(),

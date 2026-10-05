@@ -5,6 +5,9 @@ import com.example.fireview.domain.notification.service.NotificationService;
 import com.example.fireview.domain.report.dto.request.ReportCreateRequest;
 import com.example.fireview.domain.report.dto.response.ReportResponse;
 import com.example.fireview.domain.report.dto.response.ReportSummaryResponse;
+import com.example.fireview.domain.dataserver.DataServerProductKey;
+import com.example.fireview.domain.dataserver.service.DataProductTagService;
+import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.report.entity.Report;
 import com.example.fireview.domain.report.entity.ReportStatus;
 import com.example.fireview.domain.report.repository.ReportRepository;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReportService {
 
     private final ReportRepository reportRepository;
+    private final DataProductTagService dataProductTagService;
     private final ReviewRepository reviewRepository;
     private final UserService userService;
     private final NotificationService notificationService;
@@ -120,11 +124,53 @@ public class ReportService {
         return ReportResponse.from(reportRepository.save(report));
     }
 
+    /**
+     * Data 서버 리뷰 신고.
+     *
+     * <p>Spring DB 에 그 리뷰 행이 없으므로 상품 번호표와 리뷰 ID 만 붙잡는다.
+     * 번호표가 없으면 여기서 발급되고, 아직 수집 전인 상품이면 발급 자체가 거절된다 —
+     * 실재하지 않는 리뷰에 대한 신고가 쌓이지 않는다.
+     */
+    @Transactional
+    public ReportResponse createExternalReport(String platform, String productId,
+                                               String externalReviewId, String userEmail,
+                                               ReportCreateRequest request) {
+        User reporter = userService.findByEmail(userEmail);
+        Product product = dataProductTagService.resolveOrCreate(
+                new DataServerProductKey(platform, productId));
+
+        if (reportRepository.existsByReporter_IdAndProduct_IdAndExternalReviewId(
+                reporter.getId(), product.getId(), externalReviewId)) {
+            throw new CustomException(ErrorCode.REPORT_ALREADY_EXISTS);
+        }
+
+        Report saved = reportRepository.save(Report.builder()
+                .reporter(reporter)
+                .product(product)
+                .externalReviewId(externalReviewId)
+                .reason(request.reason())
+                .detail(request.detail())
+                .attachmentUrl(request.attachmentUrl())
+                .includeAiEvidence(request.includeAiEvidence())
+                .build());
+
+        notificationService.createNotification(
+                reporter,
+                NotificationType.REPORT_RECEIVED,
+                "신고가 접수되었습니다",
+                String.format("'%s' 상품의 리뷰 신고가 접수되었습니다. 검토 후 결과를 알려드리겠습니다.",
+                        product.getName()),
+                "/reports/" + saved.getId());
+
+        return ReportResponse.from(saved);
+    }
+
     private String buildStatusMessage(ReportStatus status, Report report, String comment) {
-        String reviewSummary = report.getReview().getContent() != null
-                && report.getReview().getContent().length() > 30
-                ? report.getReview().getContent().substring(0, 30) + "..."
-                : report.getReview().getContent();
+        // Data 서버 리뷰 신고는 본문을 들고 있지 않다. 그때는 상품명으로 가리킨다.
+        String content = report.reviewContentOrNull();
+        String reviewSummary = content == null
+                ? "'" + nvl(report.productNameOrNull(), "상품") + "'의 리뷰"
+                : (content.length() > 30 ? content.substring(0, 30) + "..." : content);
 
         return switch (status) {
             case UNDER_REVIEW -> String.format("신고하신 리뷰 '%s'를 검토 중입니다.", reviewSummary);
@@ -134,5 +180,9 @@ public class ReportService {
                                     reviewSummary, comment != null ? comment : "");
             default           -> "";
         };
+    }
+
+    private static String nvl(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 }

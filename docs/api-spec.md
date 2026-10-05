@@ -427,6 +427,38 @@ Data 서버 상품을 **찜·장바구니에 쓸 수 있는 Spring 상품 번호
 
 ---
 
+## 6-3. Data 서버 리뷰 신고·피드백 — **인증 필요**
+
+| Method | Path |
+|--------|------|
+| POST | `/api/reports/external/{platform}/{productId}/reviews/{externalReviewId}` |
+| POST | `/api/reviews/external/{platform}/{productId}/reviews/{externalReviewId}/feedback` |
+
+`/api/v2/products/**` 로 조회한 리뷰를 신고하거나 실제/가짜 피드백을 남긴다.
+`externalReviewId` 는 쇼핑몰이 발급한 원본 값(`reviews.items[].reviewId`)을 그대로 넣는다.
+요청 본문은 기존 신고·피드백 API 와 같다.
+
+**상품 번호표가 없으면 이 호출에서 발급된다.** 따로 `tag` 를 부를 필요가 없다.
+
+| 응답 | 상황 |
+|---|---|
+| `409 PRODUCT_NOT_COLLECTED` | 아직 수집 전인 상품. 실재하지 않는 리뷰에 기록이 쌓이지 않게 막는다 |
+| `409 REPORT_ALREADY_EXISTS` / `FEEDBACK_ALREADY_EXISTS` | 같은 리뷰에 두 번 |
+| `503 DATA_SERVER_UNAVAILABLE` | Data 서버에 닿지 못함 |
+
+### 리뷰 본문은 저장하지 않는다
+
+Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으면 신고 내용을 위조할 수 있다.
+그래서 신고·피드백 조회에서 **Data 서버 리뷰는 아래가 null 로 내려온다.**
+
+- `reviewId` (Long) — 대신 `externalReviewId`(String) 가 채워진다
+- `reviewContent` / `reviewContentSummary`
+
+`productName` 과 `productExternalId` 는 채워지므로, 운영자는 상품으로 들어가 해당 리뷰를 확인한다.
+기존 Spring 리뷰에 대한 신고·피드백은 **전과 동일하게** 본문까지 내려온다.
+
+---
+
 ## 7. 챗봇 (`/api/chat`) — **인증 필요**
 
 | Method | Path | 설명 |

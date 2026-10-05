@@ -19,17 +19,17 @@ public record FeedbackHistoryResponse(
         LocalDateTime createdAt
 ) {
     public static FeedbackHistoryResponse from(ReviewFeedback feedback) {
-        String content = feedback.getReview().getContent();
+        String content = feedback.reviewContentOrNull();
         String summary = (content != null && content.length() > 50)
                 ? content.substring(0, 50) + "..."
                 : content;
 
         return new FeedbackHistoryResponse(
                 feedback.getId(),
-                feedback.getReview().getId(),
+                feedback.reviewIdOrNull(),
                 summary,
-                feedback.getReview().getProduct().getId(),
-                feedback.getReview().getProduct().getName(),
+                feedback.productIdOrNull(),
+                feedback.productNameOrNull(),
                 feedback.getFeedbackType(),
                 feedback.getFeedbackType() == FeedbackType.REAL ? "실제 리뷰" : "가짜 리뷰",
                 feedback.getCreatedAt()
