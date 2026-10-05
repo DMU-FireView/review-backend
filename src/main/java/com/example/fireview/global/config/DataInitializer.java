@@ -36,10 +36,15 @@ import java.util.Random;
  * - 날짜 분포: 최근 30일 (추이 그래프 렌더링 가능)
  * - RTI 분포: safe 60% / warn 30% / danger 10%
  *
- * prod 프로파일에서는 실행되지 않는다.
+ * prod·test 프로파일에서는 실행되지 않는다.
+ *
+ * <p><b>@Profile 표기에 주의한다.</b> 배열 {@code {"!prod", "!test"}} 은 OR 로 묶인다.
+ * prod 로 띄우면 {@code !prod}=false, {@code !test}=true 라 OR 결과가 true 가 되어
+ * 운영에서도 시드가 돌았다. 실제로 운영 DB 에 더미 상품 33건과 비밀번호가 공개 저장소에
+ * 적힌 관리자 계정이 생겼다. AND 로 묶으려면 문자열 하나에 {@code &} 를 써야 한다.
  */
 @Component
-@Profile({"!prod", "!test"})
+@Profile("!prod & !test")
 @RequiredArgsConstructor
 @Slf4j
 public class DataInitializer implements CommandLineRunner {
