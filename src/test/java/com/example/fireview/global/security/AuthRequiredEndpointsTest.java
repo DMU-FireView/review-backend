@@ -164,9 +164,13 @@ class AuthRequiredEndpointsTest {
     @MethodSource("protectedEndpoints")
     void 서명이_틀린_토큰이면_401(String name, Supplier<MockHttpServletRequestBuilder> request)
             throws Exception {
-        // 마지막 글자를 바꿔 서명 검증에 실패시킨다
-        String tampered = bearerToken.substring(0, bearerToken.length() - 1)
-                + (bearerToken.endsWith("A") ? "B" : "A");
+        // 서명의 첫 글자를 바꿔 서명 검증에 실패시킨다.
+        // 마지막 글자는 base64url 패딩 비트를 담고 있어 바꿔도 서명이 그대로 통과할 수 있다
+        int signatureStart = bearerToken.lastIndexOf('.') + 1;
+        char first = bearerToken.charAt(signatureStart);
+        String tampered = bearerToken.substring(0, signatureStart)
+                + (first == 'A' ? 'Q' : 'A')
+                + bearerToken.substring(signatureStart + 1);
 
         // 토큰이 있는데 틀리면 CustomAuthenticationEntryPoint 가 아니라 리소스 서버 기본 진입점이
         // 응답한다. 본문이 비고 WWW-Authenticate 헤더만 온다 (만료 토큰도 같은 경로).
