@@ -8,6 +8,7 @@ import com.example.fireview.domain.user.dto.UserActivityResponse;
 import com.example.fireview.domain.user.dto.UserResponse;
 import com.example.fireview.domain.user.dto.UserSecurityResponse;
 import com.example.fireview.domain.user.dto.UserStatsResponse;
+import com.example.fireview.domain.user.entity.PlanTier;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
 import com.example.fireview.domain.wishlist.repository.WishlistRepository;
@@ -32,6 +33,26 @@ public class UserService {
     private final ReviewFeedbackRepository feedbackRepository;
     private final ReportRepository reportRepository;
     private final NotificationRepository notificationRepository;
+
+    // ── 요금제 ────────────────────────────────────────────────────────────────
+
+    /**
+     * 사용자 본인이 요금제를 바꾼다.
+     *
+     * <p><b>결제 없이 바로 바뀐다.</b> 결제 연동 전까지 요금제 화면을 쓸 수 있게 하려는
+     * 임시 경로다. 결제가 붙으면 이 메서드는 결제 확인 뒤에만 호출되어야 하고,
+     * 지금처럼 컨트롤러에서 바로 부르면 누구나 무료로 PRO 를 고를 수 있다.
+     *
+     * <p>만료 시각은 두지 않는다(무기한). 기간제 판매가 생기면 결제 쪽에서 정한다.
+     * 이미 같은 요금제여도 실패시키지 않는다 — 화면에서 같은 버튼을 두 번 눌러도
+     * 사용자가 오류를 볼 이유가 없다.
+     */
+    @Transactional
+    public UserResponse changeMyPlan(String email, PlanTier planTier) {
+        User user = findByEmail(email);
+        user.changePlan(planTier, null);
+        return UserResponse.from(user);
+    }
 
     // ── 조회 ─────────────────────────────────────────────────────────────────
 

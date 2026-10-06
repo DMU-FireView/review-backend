@@ -594,6 +594,7 @@ LLM 을 부르지 않으므로 빠르고, 쿼터를 깎지 않는다. 채팅 화
 | PATCH | `/api/users/me` | 프로필 수정 |
 | DELETE | `/api/users/me` | 회원 탈퇴 |
 | GET | `/api/users/me/stats` | 이용 통계 |
+| PATCH | `/api/users/me/plan` | 내 요금제 변경 |
 | GET | `/api/users/me/activities` | 최근 활동 |
 | GET | `/api/users/me/security` | 보안 상태 |
 | GET | `/api/users/me/settings` | 설정 조회 |
@@ -615,6 +616,18 @@ LLM 을 부르지 않으므로 빠르고, 쿼터를 깎지 않는다. 채팅 화
 
 `planTier` 는 **지금 적용 중인** 챗봇 요금제다. 만료가 지난 유료 요금제는 `FREE` 로 내려온다.
 남은 사용량까지 필요하면 `GET /api/chat/quota` 를 쓴다.
+
+**PATCH `/api/users/me/plan`** — `MyPlanUpdateRequest` → `UserResponse`
+
+```json
+{ "planTier": "PLUS" }
+```
+
+- 값은 `FREE` / `PLUS` / `PRO`. 그 외는 `400`
+- **결제 없이 즉시 바뀐다.** 결제 연동 전까지의 임시 동작이다. 만료 시각은 두지 않는다
+- JWT 가 아니라 DB 값이라 **재로그인 없이 바로 반영**된다. 변경 직후 `GET /api/chat/quota` 를 부르면 새 한도가 보인다
+- 오늘 이미 쓴 횟수는 유지된다. FREE 에서 5회 쓰고 PLUS 로 바꾸면 남은 횟수는 95회다
+- 같은 요금제로 다시 바꿔도 오류가 아니다
 
 **PATCH `/api/users/me`** — `ProfileUpdateRequest` (보낸 필드만 수정)
 

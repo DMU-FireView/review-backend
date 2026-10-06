@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,6 +46,35 @@ public class UserController {
             @Valid @RequestBody ProfileUpdateRequest request) {
         return ApiResponse.success("프로필이 수정되었습니다.",
                 userService.updateProfile(jwt.getSubject(), request));
+    }
+
+    /** PATCH /api/users/me/plan — 내 요금제 변경 */
+    @Operation(summary = "내 요금제 변경", description = """
+            로그인한 사용자 본인의 챗봇 요금제를 바꾼다.
+
+            ```json
+            { "planTier": "PLUS" }
+            ```
+
+            값은 `FREE` / `PLUS` / `PRO`. 그 외의 값은 `400` 이다.
+
+            **결제 없이 즉시 바뀐다.** 결제 연동 전까지 쓰는 임시 동작이다.
+            만료 시각은 두지 않는다(`planExpiresAt` = null).
+
+            요금제는 JWT 가 아니라 DB 값이라 **재로그인 없이 바로 반영**된다.
+            변경 직후 `GET /api/chat/quota` 를 부르면 새 한도가 보인다.
+            오늘 이미 쓴 횟수는 유지된다 — FREE 에서 5회 쓰고 PLUS 로 바꾸면 남은 횟수는 95회다.
+
+            같은 요금제로 다시 바꿔도 오류가 아니다.
+
+            응답은 변경된 사용자 정보(`GET /api/users/me` 와 같은 형태)다.
+            """)
+    @PatchMapping("/me/plan")
+    public ApiResponse<UserResponse> changeMyPlan(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody MyPlanUpdateRequest request) {
+        return ApiResponse.success("요금제가 변경되었습니다.",
+                userService.changeMyPlan(jwt.getSubject(), request.planTier()));
     }
 
     /** DELETE /api/users/me — 회원 탈퇴 */
