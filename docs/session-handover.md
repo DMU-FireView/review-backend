@@ -180,10 +180,12 @@ psql "$(echo "$DB_URL" | sed 's|jdbc:||')" -U "$DB_USERNAME"
 ```
 products: 33개 (naverProductId 정상 저장)
 reviews: 1117개 (DataInitializer 생성 더미 데이터)
-users: DataInitializer 생성 (admin@fireview.com, user@fireview.com)
+users: 자동 시드 계정 생성 없음 (개발 계정은 회원가입으로 생성)
 reports: 테이블 생성됨 (데이터 없음)
 notifications: 테이블 생성됨 (데이터 없음)
 ```
+
+기존 운영 시드 사용자 계정 정리는 `docs/sql/remove-seed-user-account.sql`을 검토 후 수동으로 진행한다.
 
 ### DB 전체 초기화가 필요할 때 순서
 ```bash

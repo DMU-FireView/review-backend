@@ -11,15 +11,10 @@ import com.example.fireview.domain.review.entity.Review;
 import com.example.fireview.domain.review.entity.TrustGrade;
 import com.example.fireview.domain.review.repository.ReviewRepository;
 import com.example.fireview.domain.review.service.RtiEngineService;
-import com.example.fireview.domain.user.entity.OAuthProvider;
-import com.example.fireview.domain.user.entity.Role;
-import com.example.fireview.domain.user.entity.User;
-import com.example.fireview.domain.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Profile;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,11 +47,9 @@ public class DataInitializer implements CommandLineRunner {
     private static final java.util.concurrent.atomic.AtomicLong FALLBACK_ID =
             new java.util.concurrent.atomic.AtomicLong(900_000_000_000L);
 
-    private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final ReviewRepository reviewRepository;
     private final SearchKeywordRepository keywordRepository;
-    private final PasswordEncoder passwordEncoder;
     private final RtiEngineService rtiEngine;
     private final NaverShoppingClient naverShoppingClient;
 
@@ -72,32 +65,11 @@ public class DataInitializer implements CommandLineRunner {
         }
         log.info("샘플 데이터 초기화 시작...");
 
-        createUsers();
         List<Product> products = createProducts();
         createReviews(products);
         createKeywords();
 
         log.info("샘플 데이터 초기화 완료. 상품={}, 리뷰={}", productRepository.count(), reviewRepository.count());
-    }
-
-    private void createUsers() {
-        userRepository.save(User.builder()
-                .email("admin@fireview.com")
-                .password(passwordEncoder.encode("password1!"))
-                .nickname("관리자")
-                .role(Role.ADMIN)
-                .provider(OAuthProvider.LOCAL)
-                .onboardingCompleted(true)
-                .build());
-
-        userRepository.save(User.builder()
-                .email("user@fireview.com")
-                .password(passwordEncoder.encode("password1!"))
-                .nickname("테스트유저")
-                .role(Role.USER)
-                .provider(OAuthProvider.LOCAL)
-                .onboardingCompleted(false)
-                .build());
     }
 
     private List<Product> createProducts() {
