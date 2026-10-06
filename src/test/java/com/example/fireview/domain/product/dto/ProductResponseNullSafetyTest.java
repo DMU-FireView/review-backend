@@ -64,4 +64,25 @@ class ProductResponseNullSafetyTest {
         assertThat(res.rtiLevel()).isNotNull();
         assertThat(res.category()).isEqualTo(Category.DIGITAL_MOBILE);
     }
+
+    @Test
+    void Data_서버_상품은_식별자를_싣는다() {
+        // 프론트가 이 값으로 v2 상세(/product/:platform/:productId)를 열고 챗봇 productId 를 채운다
+        ProductResponse res = ProductResponse.from(tagOnly());
+
+        assertThat(res.dataPlatform()).isEqualTo("kurly");
+        assertThat(res.dataProductId()).isEqualTo("1000146248");
+        assertThat(res.externalId()).isEqualTo("kurly-1000146248");
+    }
+
+    @Test
+    void 더미_상품은_식별자가_없다() {
+        Product dummy = Product.builder().id(900000000000L).name("삼성 갤럭시")
+                .platform("NAVER").category(Category.DIGITAL_MOBILE).avgRti(80.0).build();
+
+        ProductResponse res = ProductResponse.from(dummy);
+
+        assertThat(res.dataPlatform()).isNull();
+        assertThat(res.externalId()).isNull();
+    }
 }
