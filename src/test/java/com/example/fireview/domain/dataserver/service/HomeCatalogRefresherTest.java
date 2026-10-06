@@ -50,6 +50,17 @@ class HomeCatalogRefresherTest {
     }
 
     @Test
+    void 설정이_비면_코드의_기본_키워드를_쓴다() {
+        when(catalog.search(anyString(), anyInt())).thenReturn(results(1));
+
+        int total = refresher("  ").refresh();
+
+        verify(catalog).search("선크림", 3);
+        verify(catalog).search("이불", 3);
+        assertThat(total).isEqualTo(HomeCatalogRefresher.DEFAULT_KEYWORDS.size());
+    }
+
+    @Test
     void 한_키워드가_실패해도_나머지는_계속한다() {
         when(catalog.search(eq("선크림"), anyInt())).thenThrow(new IllegalStateException("timeout"));
         when(catalog.search(eq("라면"), anyInt())).thenReturn(results(5));
