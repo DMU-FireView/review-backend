@@ -412,6 +412,7 @@ Data 서버가 `(platform, productId)` 로 상품을 가리키므로 프론트�
 ```
 
 - **`springProductId` 는 null 일 수 있다.** 찜·장바구니에 쓸 Spring 쪽 번호인데, 아직 아무도 찜하지 않은 상품은 번호가 없다. 열어보기만 해도 번호를 만들면 빈 행이 계속 쌓이므로 그렇게 하지 않는다.
+- **`product.reviewCount`·`rating` 은 null 일 수 있다.** 11번가·올리브영은 Data 서버 상세 응답에서 이 값을 비운다. 목록(검색)에서 받아 둔 값이 있으면 서버가 그 값으로 채우고, 그것도 없으면 null 이다. null 은 "0개"가 아니라 "모름"으로 표시한다.
 - **`analysis` 는 현재 항상 null 이다.** 신뢰도 분석(RTI·등급·사유)은 Data 서버도 AI 서버도 아직 제공하지 않는다. 자리만 잡아둔 것이다.
 - 리뷰는 **cursor 페이지네이션**이다. `reviews.nextCursor` 를 다음 요청의 `?cursor=` 에 그대로 넣는다. null 이면 마지막 페이지다.
 
