@@ -33,6 +33,17 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @ConditionalOnProperty(name = "app.home-refresh.enabled", havingValue = "true")
 public class HomeCatalogRefresher {
 
+    /**
+     * 기본 키워드. 여러 분야를 고루 — 홈은 대분류별로 번갈아 보여주므로 분야가 겹치지 않게 고른다.
+     *
+     * <p>설정 파일이 아니라 코드에 둔다. Spring Boot 는 {@code .properties} 를 ISO-8859-1 로
+     * 읽어서 한글 기본값이 깨진다(실제로 "선크림"이 깨져 컬리가 원두를 돌려줬다).
+     * 바꾸려면 {@code HOME_REFRESH_KEYWORDS} 환경변수로 넣는다.
+     */
+    static final List<String> DEFAULT_KEYWORDS = List.of(
+            "선크림", "마스크팩", "샴푸", "립스틱", "이어폰", "텀블러", "라면",
+            "커피", "과자", "영양제", "운동화", "티셔츠", "세제", "이불");
+
     private final DataProductCatalogService catalogService;
     private final Executor executor;
     private final List<String> keywords;
@@ -46,18 +57,20 @@ public class HomeCatalogRefresher {
     public HomeCatalogRefresher(
             DataProductCatalogService catalogService,
             @Qualifier(ExecutorConfig.DATA_SERVER_EXECUTOR) Executor executor,
-            @Value("${app.home-refresh.keywords}") String keywords,
+            @Value("${app.home-refresh.keywords:}") String keywords,
             @Value("${app.home-refresh.limit-per-platform:3}") int limitPerPlatform,
             @Value("${app.home-refresh.delay-ms:1000}") long delayMs,
             @Value("${app.home-refresh.run-on-startup:true}") boolean runOnStartup) {
         this.catalogService = catalogService;
         this.executor = executor;
-        this.keywords = Arrays.stream(keywords.split(","))
+        List<String> configured = keywords == null ? List.of() : Arrays.stream(keywords.split(","))
                 .map(String::trim).filter(s -> !s.isEmpty()).toList();
+        this.keywords = configured.isEmpty() ? DEFAULT_KEYWORDS : configured;
         this.limitPerPlatform = limitPerPlatform;
         this.delayMs = delayMs;
         this.runOnStartup = runOnStartup;
-        log.info("[HomeRefresh] 키워드 {}개 / 몰당 {}건", this.keywords.size(), limitPerPlatform);
+        // 키워드를 그대로 찍는다. 깨져 들어오면 여기서 바로 보인다
+        log.info("[HomeRefresh] 키워드 {} / 몰당 {}건", this.keywords, limitPerPlatform);
     }
 
     /** 배포 직후 한 번. 요청 스레드를 붙잡지 않게 뒤에서 돌린다 */
