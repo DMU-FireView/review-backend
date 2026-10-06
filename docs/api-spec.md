@@ -252,8 +252,9 @@ https://re-view.kr/oauth2/callback?error=server_error
 
 - 상세를 `/api/v2/products/{dataPlatform}/{dataProductId}` 로 연다. 리뷰·수집 상태·신고가 거기서 동작한다
 - 챗봇 `productId` 에 `externalId` 를 그대로 넣는다
-- `avgRti` · `rtiGrade` · `category` 가 **null** 이다 (분석 전). **0 이나 기본값으로 그리지 말 것**
-- 카테고리는 `subCategory` 에 쇼핑몰 원문(`"뷰티 > 스킨케어 > 마스크팩"`)으로 온다
+- `avgRti` · `rtiGrade` 가 **null** 이다 (분석 전). **0 이나 기본값으로 그리지 말 것**
+- `category` · `categoryDisplayName` 은 쇼핑몰 카테고리와 상품명으로 서버가 분류한 값이다 (예: `BEAUTY_SKINCARE` / `"스킨케어"`). 근거가 없으면 **null** 이다 (약 1할)
+- 쇼핑몰 원문 카테고리는 `subCategory` 에 그대로 온다 (`"뷰티 > 스킨케어 > 마스크팩"`). 컬리·무신사·11번가는 상세를 한 번 연 뒤에야 채워진다
 - `platforms[0].url` 이 쇼핑몰 상품 페이지다
 
 **`ProductResponse`** (여러 API 공통)

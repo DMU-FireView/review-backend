@@ -257,7 +257,7 @@ Data 서버 상품을 내려줍니다. 프론트가 호출을 바꿀 필요는 �
 | 상세 열기 | `/product/:platform/:productId` (v2) 로. `dataPlatform`·`dataProductId` 를 쓴다 |
 | 챗봇 | `productId` 에 `externalId` 를 그대로 |
 | 신뢰도 | `avgRti` 가 **null** 이다. "분석 전" 으로 표시 |
-| 카테고리 | `category` 는 null, `subCategory` 에 쇼핑몰 원문 |
+| 카테고리 | `category`·`categoryDisplayName` 은 서버가 분류한 값(예: `"스킨케어"`, 프론트 카테고리 라벨과 같음). 분류 못 하면 null. `subCategory` 에 쇼핑몰 원문 |
 
 ### ⚠️ 지금 프론트에서 null 이 0 점으로 바뀝니다
 
