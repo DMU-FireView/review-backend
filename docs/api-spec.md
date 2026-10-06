@@ -148,7 +148,15 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 | `CHAT_PLAN_REQUIRED` | 403 | 상위 요금제 전용 기능 |
 | `NAVER_API_NOT_CONFIGURED` | 503 | 네이버 검색 API 미설정 |
 | `INVALID_INPUT` | 400 | 입력값 오류 |
+| `RESOURCE_NOT_FOUND` | 404 | 없는 경로 |
+| `METHOD_NOT_ALLOWED` | 405 | 경로는 있으나 요청 방식이 틀림 (`Allow` 헤더로 허용 방식 안내) |
 | `INTERNAL_SERVER_ERROR` | 500 | 서버 내부 오류 |
+
+경로변수 타입이 틀리거나(`/api/products/abc`) 필수 쿼리가 빠지면 `400` 이고 `message` 에
+어느 값이 문제인지 적힌다. 이 경우 `errorCode` 는 비어 있다.
+
+**`500` 은 서버 버그일 때만 나간다.** 예전에는 없는 경로·틀린 메서드·타입 오류도 전부
+`500` 이었다. 지금 `500` 을 받으면 백엔드에 알려주면 된다.
 
 ---
 
