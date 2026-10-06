@@ -22,6 +22,7 @@ public class ExecutorConfig {
 
     public static final String AI_CALL_EXECUTOR = "aiCallExecutor";
     public static final String CHAT_EXECUTOR = "chatExecutor";
+    public static final String DATA_SERVER_EXECUTOR = "dataServerExecutor";
 
     @Bean(name = AI_CALL_EXECUTOR)
     public Executor aiCallExecutor() {
@@ -62,6 +63,30 @@ public class ExecutorConfig {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * Data 서버 검색용 풀. 쇼핑몰 여러 곳을 동시에 부른다.
+     *
+     * <p>AI 호출 풀과 나눈 이유: 검색은 사용자가 화면 앞에서 기다리는 짧은 호출이고,
+     * AI 분석은 길게 붙잡는 호출이다. 같은 풀을 쓰면 분석이 몰릴 때 검색이 줄을 선다.
+     *
+     * <p>포화 시 CallerRunsPolicy — 호출 스레드가 직접 돌린다. 검색 요청 스레드는 어차피
+     * 결과를 기다려야 하므로 거절하는 것보다 느려지는 편이 낫다.
+     */
+    @Bean(name = DATA_SERVER_EXECUTOR)
+    public Executor dataServerExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setThreadNamePrefix("data-server-");
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(50);
+        executor.setKeepAliveSeconds(60);
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(30);
         executor.initialize();
         return executor;
     }

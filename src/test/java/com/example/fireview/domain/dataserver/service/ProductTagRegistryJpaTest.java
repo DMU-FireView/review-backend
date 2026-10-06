@@ -1,6 +1,7 @@
 package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
+import com.example.fireview.domain.dataserver.dto.DataServerProduct;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
@@ -60,5 +61,48 @@ class ProductTagRegistryJpaTest {
         Product tag = registry.resolveOrCreate(KEY, "  ");
 
         assertThat(tag.getName()).isEqualTo("kurly-1000146248");
+    }
+
+    private static DataServerProduct searched(int price, String category) {
+        return new DataServerProduct("kurly", "1000146248", "토리든 마스크팩",
+                "https://www.kurly.com/goods/1000146248", "토리든", null, null,
+                price, "https://img/1.jpg", category, 1318, null, null);
+    }
+
+    @Test
+    void 검색_결과로_표시_정보를_채운다() {
+        Product tag = registry.upsertForDisplay(searched(17000, "뷰티 > 스킨케어 > 마스크팩"));
+
+        assertThat(tag.getName()).isEqualTo("토리든 마스크팩");
+        assertThat(tag.getPrice()).isEqualTo(17000L);
+        assertThat(tag.getImageUrl()).isEqualTo("https://img/1.jpg");
+        assertThat(tag.getReviewCount()).isEqualTo(1318);
+        // Data 서버 카테고리는 자유 문자열이라 enum 이 아닌 subCategory 에 그대로 둔다
+        assertThat(tag.getSubCategory()).isEqualTo("뷰티 > 스킨케어 > 마스크팩");
+        assertThat(tag.getCategory()).isNull();
+        // 프론트의 "구매하러 가기"·최저가 표시가 이 링크를 쓴다
+        assertThat(tag.getPlatformLinks()).singleElement()
+                .satisfies(link -> {
+                    assertThat(link.getPlatform()).isEqualTo("KURLY");
+                    assertThat(link.getUrl()).isEqualTo("https://www.kurly.com/goods/1000146248");
+                });
+    }
+
+    @Test
+    void 다시_검색되면_같은_행을_최신값으로_덮는다() {
+        Product first = registry.upsertForDisplay(searched(17000, "뷰티"));
+        Product second = registry.upsertForDisplay(searched(15900, "뷰티"));
+
+        assertThat(second.getId()).isEqualTo(first.getId());
+        assertThat(second.getPrice()).isEqualTo(15900L);
+        assertThat(second.getPlatformLinks()).hasSize(1);   // 링크가 쌓이지 않는다
+        assertThat(productRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void 검색으로_만든_번호표도_분석_결과는_비어_있다() {
+        Product tag = registry.upsertForDisplay(searched(17000, "뷰티"));
+
+        assertThat(tag.getAvgRti()).isNull();
     }
 }
