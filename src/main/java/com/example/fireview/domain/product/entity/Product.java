@@ -36,8 +36,8 @@ public class Product {
      * 카테고리. Data 서버에서 온 상품은 비어 있을 수 있다.
      *
      * <p>Data 서버의 category 는 "뷰티 인디 > 인디 스킨케어 > 인디 마스크/팩" 같은
-     * 자유 문자열이라 이 enum 으로 안전하게 옮길 수 없다. 억지로 끼워 맞추면
-     * 화면에 엉뚱한 분류가 뜬다. 분류가 필요해질 때 매핑을 따로 만든다.
+     * 몰마다 다른 자유 문자열이다. 원문은 {@link #subCategory} 에 두고, 원문과 상품명으로
+     * 분류할 수 있을 때만 이 값을 채운다(DataServerCategoryMapper). 근거가 없으면 null 이다.
      */
     @Enumerated(EnumType.STRING)
     private Category category;

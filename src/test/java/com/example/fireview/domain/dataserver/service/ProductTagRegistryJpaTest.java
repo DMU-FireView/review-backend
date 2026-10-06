@@ -2,6 +2,7 @@ package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import org.junit.jupiter.api.Test;
@@ -77,9 +78,9 @@ class ProductTagRegistryJpaTest {
         assertThat(tag.getPrice()).isEqualTo(17000L);
         assertThat(tag.getImageUrl()).isEqualTo("https://img/1.jpg");
         assertThat(tag.getReviewCount()).isEqualTo(1318);
-        // Data 서버 카테고리는 자유 문자열이라 enum 이 아닌 subCategory 에 그대로 둔다
+        // 몰 카테고리 원문은 subCategory 에 두고, 분류 결과는 category 에 넣는다
         assertThat(tag.getSubCategory()).isEqualTo("뷰티 > 스킨케어 > 마스크팩");
-        assertThat(tag.getCategory()).isNull();
+        assertThat(tag.getCategory()).isEqualTo(Category.BEAUTY_SKINCARE);
         // 프론트의 "구매하러 가기"·최저가 표시가 이 링크를 쓴다
         assertThat(tag.getPlatformLinks()).singleElement()
                 .satisfies(link -> {
@@ -119,6 +120,27 @@ class ProductTagRegistryJpaTest {
         assertThat(tag.getPlatformLinks()).singleElement()
                 .satisfies(link -> assertThat(link.getUrl())
                         .isEqualTo("https://www.kurly.com/goods/1000146248"));
+    }
+
+    @Test
+    void 검색에_카테고리가_없어도_상세에서_받아_둔_경로로_분류한다() {
+        // 컬리·무신사·11번가는 검색 응답에 카테고리가 없고 상세에만 있다.
+        // 상세 → 재검색 순서여도 분류가 상품명 추측으로 바뀌지 않아야 한다
+        registry.upsertForDisplay(new DataServerProduct("kurly", "1000146248", "히밥 티셔츠 (라면)",
+                null, null, null, null, 19000, null, "Sportswear > 상의 > 반소매 티셔츠", null, null, null));
+
+        Product tag = registry.upsertForDisplay(new DataServerProduct("kurly", "1000146248",
+                "히밥 티셔츠 (라면)", null, null, null, null, 19000, null, null, null, null, null));
+
+        assertThat(tag.getCategory()).isEqualTo(Category.FASHION_SPORTS);
+    }
+
+    @Test
+    void 분류할_근거가_없으면_비워_둔다() {
+        Product tag = registry.upsertForDisplay(new DataServerProduct("kurly", "1000146248",
+                "ABC-123 블랙", null, null, null, null, 1000, null, null, null, null, null));
+
+        assertThat(tag.getCategory()).isNull();
     }
 
     @Test
