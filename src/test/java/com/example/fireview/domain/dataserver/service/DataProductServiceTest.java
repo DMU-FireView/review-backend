@@ -156,6 +156,57 @@ class DataProductServiceTest {
         org.mockito.Mockito.verify(registry).upsertForDisplay(any());
     }
 
+    private static DataServerProduct productWithoutCounts() {
+        // 11번가·올리브영 상세 응답처럼 리뷰 수·평점이 비어 온다
+        return new DataServerProduct(PLATFORM, PRODUCT_ID, "샘플 상품", "https://kurly.com/p",
+                null, null, null, 29900, "https://img", null, null, null, null);
+    }
+
+    @Test
+    void 상세가_비워_보낸_리뷰수와_평점은_목록_값으로_채운다() {
+        when(dataServerClient.findProduct(any(), any()))
+                .thenReturn(Optional.of(body("fresh", productWithoutCounts(), List.of(), null)));
+        Product cached = Product.builder().id(42L).name("샘플 상품")
+                .reviewCount(10816).avgRating(4.8).build();
+        when(registry.find(any())).thenReturn(Optional.of(cached));
+        when(registry.upsertForDisplay(any())).thenReturn(cached);
+
+        DataProductResponse res = call();
+
+        assertThat(res.product().reviewCount()).isEqualTo(10816);
+        assertThat(res.product().rating()).isEqualTo(4.8);
+    }
+
+    @Test
+    void 목록_값도_모르는_0이면_채우지_않는다() {
+        // 번호표 생성 시 기본값 0 은 "모름"이다. 리뷰 0 개로 보이면 안 된다
+        when(dataServerClient.findProduct(any(), any()))
+                .thenReturn(Optional.of(body("fresh", productWithoutCounts(), List.of(), null)));
+        Product cached = Product.builder().id(42L).name("샘플 상품")
+                .reviewCount(0).avgRating(0.0).build();
+        when(registry.find(any())).thenReturn(Optional.of(cached));
+        when(registry.upsertForDisplay(any())).thenReturn(cached);
+
+        DataProductResponse res = call();
+
+        assertThat(res.product().reviewCount()).isNull();
+        assertThat(res.product().rating()).isNull();
+    }
+
+    @Test
+    void 상세에_값이_있으면_그대로_쓴다() {
+        when(dataServerClient.findProduct(any(), any()))
+                .thenReturn(Optional.of(body("fresh", product(), List.of(), null)));
+        Product cached = Product.builder().id(42L).name("x").reviewCount(1).avgRating(1.0).build();
+        when(registry.find(any())).thenReturn(Optional.of(cached));
+        when(registry.upsertForDisplay(any())).thenReturn(cached);
+
+        DataProductResponse res = call();
+
+        assertThat(res.product().reviewCount()).isEqualTo(128);
+        assertThat(res.product().rating()).isEqualTo(4.5);
+    }
+
     @Test
     void 번호표가_없으면_상세를_열어도_만들지_않는다() {
         when(dataServerClient.findProduct(any(), any()))
