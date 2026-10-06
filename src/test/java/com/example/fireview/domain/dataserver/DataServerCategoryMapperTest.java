@@ -62,6 +62,9 @@ class DataServerCategoryMapperTest {
             "NULL | 레플리카 로스트 에덴 EDP 100ML | LUXURY_BEAUTY",
             "취미/팬시 | QCY 블루투스 이어폰 HT12 | DIGITAL_AV",
             "헬스/건강용품 | 아디다스 프리미엄 요가매트 5mm | SPORTS_FITNESS",
+            // 운영 배포 후 발견: 판촉 문구 "굿즈증정"
+            "NULL | [쿠숭이 굿즈증정] 브라이트닝 카밍 스팟 세럼 50ml 2개 + 토너 300ml 세트 | BEAUTY_SKINCARE",
+            "NULL | 산리오 캐릭터 굿즈 키링 | BOOKS_TICKET",
     })
     void 실제_쇼핑몰_값을_분류한다(String category, String name, String expected) {
         Category result = DataServerCategoryMapper.classify(category, name);

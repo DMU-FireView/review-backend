@@ -134,7 +134,6 @@ public final class DataServerCategoryMapper {
             new Rule(Category.BOOKS_STATIONERY, "볼펜", "사인펜", "젤펜", "필기구", "연필", "필통", "노트",
                     "다이어리", "문구", "사무용품", "형광펜"),
             new Rule(Category.BOOKS_HOBBY, "악기", "미술용품", "프라모델", "퍼즐"),
-            new Rule(Category.BOOKS_TICKET, "굿즈", "티켓"),
             new Rule(Category.TRAVEL_GOODS, "여행용", "목베개", "어댑터"),
 
             // 뷰티. 바디는 "바디 스크럽"이 클렌징으로 가지 않게 먼저 본다
@@ -162,7 +161,10 @@ public final class DataServerCategoryMapper {
             new Rule(Category.FOOD_FRESH, "과일", "사과", "바나나", "딸기", "채소", "정육", "소고기",
                     "돼지고기", "수산", "생선", "계란", "달걀", "유제품", "우유", "신선"),
             new Rule(Category.FOOD_PROCESSED, "라면", "탕면", "즉석", "통조림", "소스", "양념", "면류", "밀키트",
-                    "냉동", "참치", "가공식품", "김치", "만두")
+                    "냉동", "참치", "가공식품", "김치", "만두"),
+
+            // "굿즈증정"·"티켓 증정" 같은 판촉 문구가 이름 앞에 자주 붙어 맨 마지막에 본다
+            new Rule(Category.BOOKS_TICKET, "굿즈", "티켓")
     );
 
     /** 운동복 단서. 의류의 남녀 구분보다 먼저 본다 */
