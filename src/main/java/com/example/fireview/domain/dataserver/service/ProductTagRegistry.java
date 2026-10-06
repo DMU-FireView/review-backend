@@ -1,10 +1,14 @@
 package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
+import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.product.entity.PlatformLink;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.example.fireview.domain.product.dto.ProductResponse;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +38,9 @@ public class ProductTagRegistry {
     private static final long DUMMY_ID_FLOOR = 900_000_000_000L;
     private static final long DUMMY_ID_CEIL = 900_001_000_000L;
 
+    /** ID 비트 수. JS 안전 정수(2^53 - 1) 안에 들어가야 웹 프론트에서 값이 안 틀어진다 */
+    private static final int ID_BITS = 52;
+
     private final ProductRepository productRepository;
 
     /** 이미 붙어 있는 번호표만 찾는다. 만들지 않는다 */
@@ -53,6 +60,70 @@ public class ProductTagRegistry {
         return productRepository
                 .findByDataPlatformAndDataProductId(key.platform(), key.productId())
                 .orElseGet(() -> create(key, name));
+    }
+
+    /**
+     * Data 서버 상품으로 번호표를 찾거나 만들고, 목록 표시용 정보를 최신값으로 덮는다.
+     *
+     * <p><b>표시용 캐시다.</b> 홈·검색 목록은 상품 20개를 보여줄 때 Data 서버를 20번 부를 수
+     * 없어서 이름·가격·이미지·카테고리·리뷰 수·구매 링크만 이 행에 적어 둔다. 원본은
+     * 여전히 Data 서버이고, 검색·상세 조회 때마다 다시 덮이므로 잠깐 낡을 수는 있어도
+     * 오래 어긋나지 않는다. 리뷰와 신뢰도 분석은 적어 두지 않는다.
+     *
+     * <p>카테고리는 {@code subCategory} 에 문자열 그대로 넣는다. Data 서버 카테고리는
+     * "뷰티 > 스킨케어 > 마스크팩" 같은 자유 문자열이라 {@code Category} enum 으로 안전하게
+     * 옮길 수 없다. 억지로 끼우면 엉뚱한 분류가 뜬다.
+     */
+    @Transactional
+    @CacheEvict(value = "productList", allEntries = true)
+    public Product upsertForDisplay(DataServerProduct source) {
+        DataServerProductKey key = new DataServerProductKey(source.platform(), source.productId());
+        Product product = resolveOrCreate(key, source.name());
+
+        if (source.name() != null && !source.name().isBlank()) {
+            product.setName(source.name());
+        }
+        product.setImageUrl(source.thumbnailUrl());
+        product.setPrice(source.price() == null ? null : source.price().longValue());
+        product.setReviewCount(source.reviewCount() == null ? 0 : source.reviewCount());
+        if (source.rating() != null) {
+            product.setAvgRating(source.rating());
+        }
+        product.setSubCategory(truncate(source.category(), 100));
+
+        // 구매 링크. 프론트의 "구매하러 가기"와 최저가 표시가 이 값을 쓴다
+        product.getPlatformLinks().clear();
+        if (source.url() != null && !source.url().isBlank()) {
+            product.getPlatformLinks().add(PlatformLink.builder()
+                    .platform(truncate(key.platform().toUpperCase(), 30))
+                    .price(source.price() == null ? null : source.price().longValue())
+                    .url(truncate(source.url(), 1000))
+                    .build());
+        }
+        return product;
+    }
+
+    /**
+     * 검색 결과를 한 트랜잭션으로 저장하고 응답으로 바꾼다.
+     *
+     * <p>응답 변환까지 트랜잭션 안에서 한다. {@code ProductResponse.from} 이 구매 링크
+     * 컬렉션을 읽는데, 트랜잭션 밖에서 읽으면 지연 로딩이 실패한다.
+     *
+     * <p>홈 목록 캐시를 비운다. 새 상품이 들어왔거나 가격이 바뀌었는데 캐시가 남아 있으면
+     * 홈에 옛 값이 계속 보인다.
+     */
+    @Transactional
+    @CacheEvict(value = "productList", allEntries = true)
+    public java.util.List<ProductResponse> upsertAllForDisplay(java.util.List<DataServerProduct> sources) {
+        return sources.stream()
+                .map(this::upsertForDisplay)
+                .map(ProductResponse::from)
+                .toList();
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null) return null;
+        return value.length() <= max ? value : value.substring(0, max);
     }
 
     private Product create(DataServerProductKey key, String name) {
@@ -86,8 +157,11 @@ public class ProductTagRegistry {
      * 만들려 하면 유니크 제약에 걸려 한쪽이 실패한다. 같은 키에서 늘 같은 ID 가 나오면
      * 재시도해도 같은 행을 가리키므로 그 경합이 사라진다. DB 시퀀스 생성 DDL 도 필요 없다.
      *
-     * <p>SHA-256 상위 63비트를 쓴다. 상품 10만 개 기준 충돌 확률은 10^-9 수준이다.
-     * 그래도 충돌하면 유니크 제약이 아니라 기본키 제약에 걸려 바로 드러난다.
+     * <p><b>상한은 2^52 이다.</b> 프론트가 Flutter 웹이라 JSON 숫자를 JS double 로 읽고,
+     * 2^53 을 넘는 정수는 반올림된다. 처음에는 SHA-256 상위 63비트를 써서 10^18 대의 ID 가
+     * 나왔는데, 그러면 브라우저가 받는 순간 값이 틀어져 그 ID 로 상세·찜을 부르면 엉뚱한
+     * 번호가 간다. 상위 52비트만 쓴다. 상품 10만 개 기준 충돌 확률은 10^-6 수준이고,
+     * 충돌하면 기본키 제약에 걸려 바로 드러난다.
      */
     static long allocateId(DataServerProductKey key) {
         byte[] digest = sha256(key.asExternalId());
@@ -95,7 +169,7 @@ public class ProductTagRegistry {
         for (int i = 0; i < 8; i++) {
             value = (value << 8) | (digest[i] & 0xFFL);
         }
-        value &= Long.MAX_VALUE;   // 음수 제거
+        value >>>= (64 - ID_BITS);   // 상위 52비트, 항상 양수
         if (value == 0) {
             value = 1;
         }

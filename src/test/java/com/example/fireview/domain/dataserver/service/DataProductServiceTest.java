@@ -34,6 +34,7 @@ class DataProductServiceTest {
 
     @Mock DataServerClient dataServerClient;
     @Mock ProductRepository productRepository;
+    @Mock ProductTagRegistry registry;
     @InjectMocks DataProductService service;
 
     private static DataServerProduct product() {
@@ -141,5 +142,39 @@ class DataProductServiceTest {
         assertThat(service.getJob(1L)).isEmpty();
         assertThat(service.getJob(2L)).get()
                 .extracting(DataProductResponse.CollectionJobStatus::reviewStatus).isEqualTo("failed");
+    }
+
+    @Test
+    void 번호표가_있는_상품은_상세를_열_때_표시_정보를_갱신한다() {
+        // 홈·검색 목록 캐시가 오래 낡지 않게 하는 지점이다
+        when(dataServerClient.findProduct(any(), any()))
+                .thenReturn(Optional.of(body("fresh", product(), List.of(), null)));
+        when(registry.find(any())).thenReturn(Optional.of(Product.builder().id(42L).name("x").build()));
+
+        call();
+
+        org.mockito.Mockito.verify(registry).upsertForDisplay(any());
+    }
+
+    @Test
+    void 번호표가_없으면_상세를_열어도_만들지_않는다() {
+        when(dataServerClient.findProduct(any(), any()))
+                .thenReturn(Optional.of(body("fresh", product(), List.of(), null)));
+        when(registry.find(any())).thenReturn(Optional.empty());
+
+        call();
+
+        org.mockito.Mockito.verify(registry, org.mockito.Mockito.never()).upsertForDisplay(any());
+    }
+
+    @Test
+    void 수집_전이면_갱신하지_않는다() {
+        when(dataServerClient.findProduct(any(), any())).thenReturn(Optional.of(
+                body("queued", null, null, new DataServerJob(9L, PLATFORM, PRODUCT_ID,
+                        "pending", "pending", "pending", null))));
+
+        call();
+
+        org.mockito.Mockito.verify(registry, org.mockito.Mockito.never()).upsertForDisplay(any());
     }
 }

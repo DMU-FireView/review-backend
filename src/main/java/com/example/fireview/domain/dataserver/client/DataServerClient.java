@@ -2,6 +2,7 @@ package com.example.fireview.domain.dataserver.client;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerJob;
+import com.example.fireview.domain.dataserver.dto.DataServerProduct;
 import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -14,6 +15,9 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -104,6 +108,40 @@ public class DataServerClient {
             // 화면을 죽이지 않고 "데이터 없음"으로 떨어뜨린다.
             log.warn("[DataServer] 상품 조회 실패 - key={}: {}", key.asExternalId(), e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * 쇼핑몰 한 곳에서 키워드로 상품을 찾는다.
+     *
+     * <p>{@code GET /{platform}/search} 는 저장하지 않고 쇼핑몰을 바로 조회한다.
+     * 이름만 보면 느릴 것 같지만 운영에서 재보니 컬리 240ms, 올리브영 475ms, 무신사 636ms,
+     * 11번가 698ms 였다. 브라우저 기반 수집기(오늘의집·네이버 등)는 실패하거나 수십 초가
+     * 걸리므로 호출할 플랫폼은 설정으로 고른다.
+     *
+     * <p>실패하면 빈 목록이다. 한 몰이 실패했다고 검색 전체가 실패하면 안 된다.
+     */
+    public List<DataServerProduct> searchProducts(String platform, String keyword, int limit) {
+        if (!isConfigured() || platform == null || keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        // URI 객체로 넘겨야 RestTemplate 이 다시 인코딩하지 않는다. 문자열로 넘기면
+        // 한글 키워드의 % 가 %25 로 이중 인코딩된다.
+        URI uri = UriComponentsBuilder.fromUriString(baseUrl)
+                .path("/{platform}/search")
+                .queryParam("keyword", keyword)
+                .queryParam("limit", limit)
+                .buildAndExpand(platform)
+                .encode()
+                .toUri();
+        try {
+            DataServerProduct[] body = restTemplate.exchange(
+                    uri, org.springframework.http.HttpMethod.GET,
+                    new HttpEntity<>(headers()), DataServerProduct[].class).getBody();
+            return body == null ? List.of() : Arrays.asList(body);
+        } catch (RestClientException e) {
+            log.warn("[DataServer] 검색 실패 - platform={}, keyword={}: {}", platform, keyword, e.getMessage());
+            return List.of();
         }
     }
 

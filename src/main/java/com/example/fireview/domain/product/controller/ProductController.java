@@ -2,6 +2,7 @@ package com.example.fireview.domain.product.controller;
 
 import com.example.fireview.domain.dashboard.service.DashboardService;
 import com.example.fireview.domain.product.cache.NaverProductCache;
+import com.example.fireview.domain.dataserver.service.DataProductCatalogService;
 import com.example.fireview.domain.product.dto.ProductResponse;
 import com.example.fireview.domain.product.service.ProductService;
 import com.example.fireview.domain.review.dto.ReviewResponse;
@@ -29,12 +30,18 @@ public class ProductController {
     private final DashboardService dashboardService;
     private final NaverSearchService naverSearchService;
     private final NaverProductCache naverProductCache;
+    private final DataProductCatalogService dataProductCatalogService;
 
     @GetMapping
     public ApiResponse<List<ProductResponse>> getProducts(
             @RequestParam(required = false) String keyword) {
         if (keyword != null && !keyword.isBlank()) {
-            // 네이버 API + DB 병합 결과 반환 (DB만 조회 시 결과 부족 문제 해결)
+            // Data 서버가 설정돼 있으면 실제 쇼핑몰 상품을 검색한다. 응답 모양은 같다.
+            // 결과가 비어도 더미로 채우지 않는다 — 진짜 검색 결과에 가짜를 섞지 않는다.
+            if (dataProductCatalogService.isEnabled()) {
+                return ApiResponse.success(dataProductCatalogService.search(keyword));
+            }
+            // Data 서버가 없는 로컬 개발 환경: 네이버 API + DB 병합 결과
             return ApiResponse.success(naverSearchService.search(keyword, 100).products());
         }
         return ApiResponse.success(productService.getAllProducts());

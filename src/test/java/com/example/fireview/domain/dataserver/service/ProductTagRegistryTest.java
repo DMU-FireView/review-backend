@@ -39,6 +39,19 @@ class ProductTagRegistryTest {
     }
 
     @Test
+    void ID는_JS_안전_정수_범위다() {
+        // 프론트가 Flutter 웹이라 2^53 을 넘는 정수는 반올림된다. 넘으면 상세·찜이 엉뚱한 번호로 간다
+        long jsMaxSafe = 9_007_199_254_740_991L;   // 2^53 - 1
+        for (String platform : new String[]{"kurly", "naver", "elevenst", "oliveyoung", "musinsa"}) {
+            for (int i = 0; i < 5000; i++) {
+                assertThat(ProductTagRegistry.allocateId(
+                        new DataServerProductKey(platform, String.valueOf(i))))
+                        .isBetween(1L, jsMaxSafe);
+            }
+        }
+    }
+
+    @Test
     void 더미_ID_구간을_비켜간다() {
         // 기존 더미 33건이 900000000000~ 를 쓴다. 겹치면 같은 행을 가리키게 된다
         for (int i = 0; i < 2000; i++) {

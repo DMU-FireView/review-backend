@@ -227,13 +227,34 @@ https://re-view.kr/oauth2/callback?error=server_error
 
 | Method | Path | 설명 |
 |--------|------|------|
-| GET | `/api/products` | 상품 목록 (`?keyword=` 검색 가능) |
+| GET | `/api/products` | 상품 목록 (`?keyword=` 검색 가능) — **출처: Data 서버** |
 | GET | `/api/products/{id}` | 상품 상세 |
 | GET | `/api/products/{productId}/reviews` | 상품 리뷰 목록 |
 | GET | `/api/search?keyword=` | 네이버 쇼핑 통합 검색 |
 | GET | `/api/dashboard` | 대시보드 (추천/최근/위험 상품 + 인기 키워드) |
 | GET | `/api/dashboard/keywords` | 인기 검색어 |
 | GET | `/api/landing/stats` | 랜딩 통계 |
+
+### `/api/products` 는 Data 서버 상품을 내려준다
+
+경로와 응답 모양은 예전과 같고 **출처만 바뀌었다.**
+
+| 요청 | 출처 |
+|---|---|
+| `GET /api/products?keyword=마스크팩` | Data 서버 검색 — 컬리·올리브영·무신사·11번가를 **동시에** 조회 (보통 1초 안) |
+| `GET /api/products` (홈) | 지금까지 검색으로 들어온 실제 상품, 최근 100건. 하나도 없을 때만 예전 더미 |
+
+- 검색 결과는 몰별로 **번갈아** 섞여 나온다. 한 몰이 늦거나 실패하면 그 몰만 빠진다
+- 결과가 없으면 빈 배열이다. 더미로 채우지 않는다
+- Data 서버에는 "전체 상품 목록" API 가 없다. 그래서 **누군가 검색한 상품이 홈에 쌓인다**
+
+**Data 서버 상품 구분법** — `externalId` 가 있으면 Data 서버 상품이다. 이 상품은
+
+- 상세를 `/api/v2/products/{dataPlatform}/{dataProductId}` 로 연다. 리뷰·수집 상태·신고가 거기서 동작한다
+- 챗봇 `productId` 에 `externalId` 를 그대로 넣는다
+- `avgRti` · `rtiGrade` · `category` 가 **null** 이다 (분석 전). **0 이나 기본값으로 그리지 말 것**
+- 카테고리는 `subCategory` 에 쇼핑몰 원문(`"뷰티 > 스킨케어 > 마스크팩"`)으로 온다
+- `platforms[0].url` 이 쇼핑몰 상품 페이지다
 
 **`ProductResponse`** (여러 API 공통)
 
@@ -259,7 +280,10 @@ https://re-view.kr/oauth2/callback?error=server_error
   "platforms": [{ "platform": "NAVER", "price": 29900, "url": "https://..." }],
   "lowestPrice": 28500,
   "lowestPlatform": "GMARKET",
-  "productUrl": "https://..."
+  "productUrl": "https://...",
+  "dataPlatform": "kurly",
+  "dataProductId": "1000146248",
+  "externalId": "kurly-1000146248"
 }
 ```
 

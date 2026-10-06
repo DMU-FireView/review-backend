@@ -35,8 +35,12 @@ public class DataProductService {
 
     private final DataServerClient dataServerClient;
     private final ProductRepository productRepository;
+    private final ProductTagRegistry registry;
 
-    @Transactional(readOnly = true)
+    /**
+     * 트랜잭션을 걸지 않는다. 대부분의 시간이 Data 서버 응답을 기다리는 데 쓰이는데,
+     * 그동안 DB 커넥션을 붙잡을 이유가 없다. 번호표 조회·갱신은 각자 짧게 끝난다.
+     */
     public DataProductResponse getProduct(String platform, String productId, String cursor) {
         DataServerProductKey key = new DataServerProductKey(platform, productId);
 
@@ -51,6 +55,13 @@ public class DataProductService {
 
         DataServerProductResponse body = found.get();
         CollectionStatus status = CollectionStatus.from(body.status());
+
+        // 이미 번호표가 있는 상품이면 홈·검색 목록에 보이는 표시 정보(가격·이미지 등)를
+        // 지금 받은 값으로 덮는다. 목록 캐시가 오래 낡지 않게 하는 지점이다.
+        // 번호표가 없으면 만들지 않는다 — 열어보기만 해도 행이 생기면 안 된다.
+        if (body.hasUsableData() && registry.find(key).isPresent()) {
+            registry.upsertForDisplay(body.product());
+        }
 
         return new DataProductResponse(
                 status,
