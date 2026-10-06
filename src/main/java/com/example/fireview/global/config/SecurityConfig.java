@@ -3,6 +3,7 @@ package com.example.fireview.global.config;
 import com.example.fireview.domain.auth.oauth2.CustomOAuth2UserService;
 import com.example.fireview.domain.auth.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
 import com.example.fireview.domain.auth.oauth2.OAuth2SuccessHandler;
+import com.example.fireview.global.security.BearerTokenChallengeEntryPoint;
 import com.example.fireview.global.security.CustomAuthenticationEntryPoint;
 import com.example.fireview.global.security.ServiceTokenFilter;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,7 @@ public class SecurityConfig {
     private final CustomOAuth2UserService customOAuth2UserService;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
+    private final BearerTokenChallengeEntryPoint bearerTokenEntryPoint;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
     private final ServiceTokenFilter serviceTokenFilter;
     private final List<String> allowedOriginPatterns;
@@ -47,6 +49,7 @@ public class SecurityConfig {
                           CustomOAuth2UserService customOAuth2UserService,
                           OAuth2SuccessHandler oAuth2SuccessHandler,
                           CustomAuthenticationEntryPoint authenticationEntryPoint,
+                          BearerTokenChallengeEntryPoint bearerTokenEntryPoint,
                           HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository,
                           ServiceTokenFilter serviceTokenFilter,
                           @Value("${app.cors.allowed-origins}") List<String> allowedOriginPatterns,
@@ -55,6 +58,7 @@ public class SecurityConfig {
         this.customOAuth2UserService = customOAuth2UserService;
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
         this.authenticationEntryPoint = authenticationEntryPoint;
+        this.bearerTokenEntryPoint = bearerTokenEntryPoint;
         this.authorizationRequestRepository = authorizationRequestRepository;
         this.serviceTokenFilter = serviceTokenFilter;
         this.allowedOriginPatterns = allowedOriginPatterns;
@@ -109,9 +113,10 @@ public class SecurityConfig {
                 .exceptionHandling(ex ->
                         ex.authenticationEntryPoint(authenticationEntryPoint))
                 // 만료·위조 토큰은 BearerTokenAuthenticationFilter 가 직접 진입점을 부른다.
-                // exceptionHandling 의 진입점은 이 경로에 쓰이지 않으므로 여기에도 지정한다
+                // exceptionHandling 의 진입점은 이 경로에 쓰이지 않으므로 여기에도 지정한다.
+                // 본문은 공통 JSON, 헤더는 RFC 6750 의 Bearer challenge 를 함께 내려준다
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .authenticationEntryPoint(bearerTokenEntryPoint)
                         .jwt(jwt -> jwt
                                 .decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))

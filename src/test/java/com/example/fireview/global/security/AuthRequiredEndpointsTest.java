@@ -173,7 +173,8 @@ class AuthRequiredEndpointsTest {
                 + (first == 'A' ? 'Q' : 'A')
                 + bearerToken.substring(signatureStart + 1);
 
-        expectUnauthorized(mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, tampered)));
+        expectInvalidTokenChallenge(
+                mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, tampered)));
 
         assertNoServiceCalled();
     }
@@ -182,7 +183,8 @@ class AuthRequiredEndpointsTest {
     @MethodSource("protectedEndpoints")
     void 만료된_토큰이면_401_과_공통_에러_포맷(String name, Supplier<MockHttpServletRequestBuilder> request)
             throws Exception {
-        expectUnauthorized(mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, expiredBearerToken())));
+        expectInvalidTokenChallenge(
+                mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, expiredBearerToken())));
 
         assertNoServiceCalled();
     }
@@ -267,12 +269,27 @@ class AuthRequiredEndpointsTest {
     }
 
     /** 토큰 없음 · 위조 · 만료 모두 같은 본문이어야 프론트가 401 을 한 가지로 파싱한다 */
-    private void expectUnauthorized(ResultActions result) throws Exception {
-        result.andExpect(status().isUnauthorized())
+    private ResultActions expectUnauthorized(ResultActions result) throws Exception {
+        return result.andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"))
                 .andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+    }
+
+    /**
+     * 위조·만료 토큰은 공통 본문에 더해 RFC 6750 §3 의 Bearer challenge 를 내려준다.
+     * JwtDecoder 의 예외 메시지는 error_description 에 실리지 않고 고정 문구여야 한다
+     */
+    private void expectInvalidTokenChallenge(ResultActions result) throws Exception {
+        String challenge = expectUnauthorized(result)
+                .andReturn().getResponse().getHeader(HttpHeaders.WWW_AUTHENTICATE);
+
+        assertThat(challenge)
+                .startsWith("Bearer ")
+                .contains("error=\"invalid_token\"")
+                .contains("error_description=\"The access token is invalid or expired\"")
+                .contains("error_uri=\"https://tools.ietf.org/html/rfc6750#section-3.1\"");
     }
 
     /**
