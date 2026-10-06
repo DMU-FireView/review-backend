@@ -34,6 +34,9 @@ public class ProductTagRegistry {
     private static final long DUMMY_ID_FLOOR = 900_000_000_000L;
     private static final long DUMMY_ID_CEIL = 900_001_000_000L;
 
+    /** ID 비트 수. JS 안전 정수(2^53 - 1) 안에 들어가야 웹 프론트에서 값이 안 틀어진다 */
+    private static final int ID_BITS = 52;
+
     private final ProductRepository productRepository;
 
     /** 이미 붙어 있는 번호표만 찾는다. 만들지 않는다 */
@@ -86,8 +89,11 @@ public class ProductTagRegistry {
      * 만들려 하면 유니크 제약에 걸려 한쪽이 실패한다. 같은 키에서 늘 같은 ID 가 나오면
      * 재시도해도 같은 행을 가리키므로 그 경합이 사라진다. DB 시퀀스 생성 DDL 도 필요 없다.
      *
-     * <p>SHA-256 상위 63비트를 쓴다. 상품 10만 개 기준 충돌 확률은 10^-9 수준이다.
-     * 그래도 충돌하면 유니크 제약이 아니라 기본키 제약에 걸려 바로 드러난다.
+     * <p><b>상한은 2^52 이다.</b> 프론트가 Flutter 웹이라 JSON 숫자를 JS double 로 읽고,
+     * 2^53 을 넘는 정수는 반올림된다. 처음에는 SHA-256 상위 63비트를 써서 10^18 대의 ID 가
+     * 나왔는데, 그러면 브라우저가 받는 순간 값이 틀어져 그 ID 로 상세·찜을 부르면 엉뚱한
+     * 번호가 간다. 상위 52비트만 쓴다. 상품 10만 개 기준 충돌 확률은 10^-6 수준이고,
+     * 충돌하면 기본키 제약에 걸려 바로 드러난다.
      */
     static long allocateId(DataServerProductKey key) {
         byte[] digest = sha256(key.asExternalId());
@@ -95,7 +101,7 @@ public class ProductTagRegistry {
         for (int i = 0; i < 8; i++) {
             value = (value << 8) | (digest[i] & 0xFFL);
         }
-        value &= Long.MAX_VALUE;   // 음수 제거
+        value >>>= (64 - ID_BITS);   // 상위 52비트, 항상 양수
         if (value == 0) {
             value = 1;
         }
