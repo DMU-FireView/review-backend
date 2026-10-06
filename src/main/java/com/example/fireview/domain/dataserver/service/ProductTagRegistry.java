@@ -80,23 +80,36 @@ public class ProductTagRegistry {
         DataServerProductKey key = new DataServerProductKey(source.platform(), source.productId());
         Product product = resolveOrCreate(key, source.name());
 
-        if (source.name() != null && !source.name().isBlank()) {
+        // 빈 값(null)은 "모른다"는 뜻이지 "없다"는 뜻이 아니다. 기존 값을 지우지 않는다.
+        // Data 서버는 같은 상품이라도 검색 응답에는 review_count 를 주고 상세 응답에서는
+        // 비우는 쇼핑몰이 있다(11번가·올리브영). 그대로 덮으면 상세를 한 번 열 때마다
+        // 목록의 리뷰 수가 0 이 됐다.
+        if (hasText(source.name())) {
             product.setName(source.name());
         }
-        product.setImageUrl(source.thumbnailUrl());
-        product.setPrice(source.price() == null ? null : source.price().longValue());
-        product.setReviewCount(source.reviewCount() == null ? 0 : source.reviewCount());
+        if (hasText(source.thumbnailUrl())) {
+            product.setImageUrl(source.thumbnailUrl());
+        }
+        if (source.price() != null) {
+            product.setPrice(source.price().longValue());
+        }
+        if (source.reviewCount() != null) {
+            product.setReviewCount(source.reviewCount());
+        }
         if (source.rating() != null) {
             product.setAvgRating(source.rating());
         }
-        product.setSubCategory(truncate(source.category(), 100));
+        if (hasText(source.category())) {
+            product.setSubCategory(truncate(source.category(), 100));
+        }
 
-        // 구매 링크. 프론트의 "구매하러 가기"와 최저가 표시가 이 값을 쓴다
-        product.getPlatformLinks().clear();
-        if (source.url() != null && !source.url().isBlank()) {
+        // 구매 링크. 프론트의 "구매하러 가기"와 최저가 표시가 이 값을 쓴다.
+        // 주소가 비어 오면 기존 링크를 그대로 둔다.
+        if (hasText(source.url())) {
+            product.getPlatformLinks().clear();
             product.getPlatformLinks().add(PlatformLink.builder()
                     .platform(truncate(key.platform().toUpperCase(), 30))
-                    .price(source.price() == null ? null : source.price().longValue())
+                    .price(product.getPrice())
                     .url(truncate(source.url(), 1000))
                     .build());
         }
@@ -124,6 +137,10 @@ public class ProductTagRegistry {
     private static String truncate(String value, int max) {
         if (value == null) return null;
         return value.length() <= max ? value : value.substring(0, max);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Product create(DataServerProductKey key, String name) {

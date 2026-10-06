@@ -8,6 +8,7 @@ import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import com.example.fireview.domain.dataserver.dto.DataServerReview;
 import com.example.fireview.domain.dataserver.dto.response.CollectionStatus;
 import com.example.fireview.domain.dataserver.dto.response.DataProductResponse;
+import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -59,14 +60,15 @@ public class DataProductService {
         // 이미 번호표가 있는 상품이면 홈·검색 목록에 보이는 표시 정보(가격·이미지 등)를
         // 지금 받은 값으로 덮는다. 목록 캐시가 오래 낡지 않게 하는 지점이다.
         // 번호표가 없으면 만들지 않는다 — 열어보기만 해도 행이 생기면 안 된다.
+        Product cached = null;
         if (body.hasUsableData() && registry.find(key).isPresent()) {
-            registry.upsertForDisplay(body.product());
+            cached = registry.upsertForDisplay(body.product());
         }
 
         return new DataProductResponse(
                 status,
                 springProductId(key),
-                body.hasUsableData() ? toDetail(key, body.product()) : null,
+                body.hasUsableData() ? toDetail(key, body.product(), cached) : null,
                 toReviewPage(body),
                 toJob(body.job()),
                 null);   // analysis — 아직 어느 서버도 제공하지 않는다
@@ -91,15 +93,36 @@ public class DataProductService {
                 .orElse(null);
     }
 
+    /**
+     * @param cached 목록 표시용으로 적어 둔 값. 없으면 null.
+     *               상세 응답이 비워 보낸 리뷰 수·평점을 여기서 보충한다. 11번가·올리브영은
+     *               검색 응답에만 이 값을 주고 상세 응답에서는 비우는데, 그대로 내려주면
+     *               목록에서 본 수치가 상세 화면에서 사라진다.
+     */
     private DataProductResponse.DataProductDetail toDetail(DataServerProductKey key,
-                                                           DataServerProduct p) {
+                                                           DataServerProduct p,
+                                                           Product cached) {
         return new DataProductResponse.DataProductDetail(
                 p.platform() != null ? p.platform() : key.platform(),
                 p.productId() != null ? p.productId() : key.productId(),
                 key.asExternalId(),
                 p.name(), p.url(), p.brand(), p.manufacturer(), p.seller(),
                 p.price(), p.thumbnailUrl(), p.category(),
-                p.reviewCount(), p.rating(), p.lastCollectedAt());
+                p.reviewCount() != null ? p.reviewCount() : cachedReviewCount(cached),
+                p.rating() != null ? p.rating() : cachedRating(cached),
+                p.lastCollectedAt());
+    }
+
+    // 번호표를 만들 때 리뷰 수·평점이 비어 있으면 0 으로 채워진다(Product.onCreate).
+    // 그 0 은 "모름"이므로 보충하지 않는다. 실제 0 개를 보여주는 것보다 비워 두는 편이 낫다.
+    private static Integer cachedReviewCount(Product cached) {
+        if (cached == null || cached.getReviewCount() == null || cached.getReviewCount() <= 0) return null;
+        return cached.getReviewCount();
+    }
+
+    private static Double cachedRating(Product cached) {
+        if (cached == null || cached.getAvgRating() == null || cached.getAvgRating() <= 0) return null;
+        return cached.getAvgRating();
     }
 
     private DataProductResponse.ReviewPage toReviewPage(DataServerProductResponse body) {
