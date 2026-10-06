@@ -100,6 +100,28 @@ class ProductTagRegistryJpaTest {
     }
 
     @Test
+    void 상세_응답이_값을_비워_와도_목록에_보이던_값을_지우지_않는다() {
+        // 11번가·올리브영은 검색 응답에는 리뷰 수를 주고 상세 응답에서는 비운다.
+        // 예전에는 상세를 한 번 열면 목록의 리뷰 수가 0 이 됐다.
+        registry.upsertForDisplay(new DataServerProduct("kurly", "1000146248", "토리든 마스크팩",
+                "https://www.kurly.com/goods/1000146248", null, null, null,
+                17000, "https://img/1.jpg", "뷰티", 1318, 4.8, null));
+
+        Product tag = registry.upsertForDisplay(new DataServerProduct("kurly", "1000146248",
+                null, null, null, null, null, null, null, null, null, null, null));
+
+        assertThat(tag.getName()).isEqualTo("토리든 마스크팩");
+        assertThat(tag.getReviewCount()).isEqualTo(1318);
+        assertThat(tag.getAvgRating()).isEqualTo(4.8);
+        assertThat(tag.getPrice()).isEqualTo(17000L);
+        assertThat(tag.getImageUrl()).isEqualTo("https://img/1.jpg");
+        assertThat(tag.getSubCategory()).isEqualTo("뷰티");
+        assertThat(tag.getPlatformLinks()).singleElement()
+                .satisfies(link -> assertThat(link.getUrl())
+                        .isEqualTo("https://www.kurly.com/goods/1000146248"));
+    }
+
+    @Test
     void 검색으로_만든_번호표도_분석_결과는_비어_있다() {
         Product tag = registry.upsertForDisplay(searched(17000, "뷰티"));
 
