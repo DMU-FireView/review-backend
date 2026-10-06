@@ -22,19 +22,25 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -51,7 +57,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -78,6 +83,7 @@ class AuthRequiredEndpointsTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired JwtTokenProvider jwtTokenProvider;
+    @Autowired JwtEncoder jwtEncoder;
 
     @MockitoBean DataProductService dataProductService;
     @MockitoBean DataProductTagService dataProductTagService;
@@ -150,19 +156,14 @@ class AuthRequiredEndpointsTest {
     @MethodSource("protectedEndpoints")
     void 토큰_없이_호출하면_401_과_공통_에러_포맷(String name, Supplier<MockHttpServletRequestBuilder> request)
             throws Exception {
-        mockMvc.perform(request.get())
-                .andExpect(status().isUnauthorized())
-                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+        expectUnauthorized(mockMvc.perform(request.get()));
 
         assertNoServiceCalled();
     }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("protectedEndpoints")
-    void 서명이_틀린_토큰이면_401(String name, Supplier<MockHttpServletRequestBuilder> request)
+    void 서명이_틀린_토큰이면_401_과_공통_에러_포맷(String name, Supplier<MockHttpServletRequestBuilder> request)
             throws Exception {
         // 서명의 첫 글자를 바꿔 서명 검증에 실패시킨다.
         // 마지막 글자는 base64url 패딩 비트를 담고 있어 바꿔도 서명이 그대로 통과할 수 있다
@@ -172,12 +173,16 @@ class AuthRequiredEndpointsTest {
                 + (first == 'A' ? 'Q' : 'A')
                 + bearerToken.substring(signatureStart + 1);
 
-        // 토큰이 있는데 틀리면 CustomAuthenticationEntryPoint 가 아니라 리소스 서버 기본 진입점이
-        // 응답한다. 본문이 비고 WWW-Authenticate 헤더만 온다 (만료 토큰도 같은 경로).
-        // SecurityConfig 가 oauth2ResourceServer 에 진입점을 따로 지정하지 않아서다.
-        mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, tampered))
-                .andExpect(status().isUnauthorized())
-                .andExpect(header().string(HttpHeaders.WWW_AUTHENTICATE, containsString("invalid_token")));
+        expectUnauthorized(mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, tampered)));
+
+        assertNoServiceCalled();
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("protectedEndpoints")
+    void 만료된_토큰이면_401_과_공통_에러_포맷(String name, Supplier<MockHttpServletRequestBuilder> request)
+            throws Exception {
+        expectUnauthorized(mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, expiredBearerToken())));
 
         assertNoServiceCalled();
     }
@@ -259,6 +264,33 @@ class AuthRequiredEndpointsTest {
                 .andExpect(status().isUnauthorized());
 
         verify(dataProductTagService, never()).resolveOrCreate(any());
+    }
+
+    /** 토큰 없음 · 위조 · 만료 모두 같은 본문이어야 프론트가 401 을 한 가지로 파싱한다 */
+    private void expectUnauthorized(ResultActions result) throws Exception {
+        result.andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").value("로그인이 필요합니다."));
+    }
+
+    /**
+     * 운영과 같은 키로 서명하되 exp 만 과거로 둔다. 서명은 맞으므로 만료 검증에서만 떨어진다.
+     * JwtTimestampValidator 의 기본 허용 오차(60초)를 넘기도록 충분히 과거로 잡는다
+     */
+    private String expiredBearerToken() {
+        Instant issuedAt = Instant.now().minus(Duration.ofHours(2));
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("fireview")
+                .issuedAt(issuedAt)
+                .expiresAt(issuedAt.plus(Duration.ofHours(1)))
+                .subject(EMAIL)
+                .claim("role", Role.USER.name())
+                .claim("userId", 1L)
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        return "Bearer " + jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
     }
 
     private void assertNoServiceCalled() {

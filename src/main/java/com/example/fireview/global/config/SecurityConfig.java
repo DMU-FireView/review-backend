@@ -108,8 +108,11 @@ public class SecurityConfig {
                 .addFilterBefore(serviceTokenFilter, UsernamePasswordAuthenticationFilter.class)
                 .exceptionHandling(ex ->
                         ex.authenticationEntryPoint(authenticationEntryPoint))
-                .oauth2ResourceServer(oauth2 ->
-                        oauth2.jwt(jwt -> jwt
+                // 만료·위조 토큰은 BearerTokenAuthenticationFilter 가 직접 진입점을 부른다.
+                // exceptionHandling 의 진입점은 이 경로에 쓰이지 않으므로 여기에도 지정한다
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .authenticationEntryPoint(authenticationEntryPoint)
+                        .jwt(jwt -> jwt
                                 .decoder(jwtDecoder)
                                 .jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .oauth2Login(oauth2 -> oauth2
