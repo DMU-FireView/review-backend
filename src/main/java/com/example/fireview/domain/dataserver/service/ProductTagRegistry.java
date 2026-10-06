@@ -1,7 +1,9 @@
 package com.example.fireview.domain.dataserver.service;
 
+import com.example.fireview.domain.dataserver.DataServerCategoryMapper;
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.PlatformLink;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
@@ -70,9 +72,9 @@ public class ProductTagRegistry {
      * 여전히 Data 서버이고, 검색·상세 조회 때마다 다시 덮이므로 잠깐 낡을 수는 있어도
      * 오래 어긋나지 않는다. 리뷰와 신뢰도 분석은 적어 두지 않는다.
      *
-     * <p>카테고리는 {@code subCategory} 에 문자열 그대로 넣는다. Data 서버 카테고리는
-     * "뷰티 > 스킨케어 > 마스크팩" 같은 자유 문자열이라 {@code Category} enum 으로 안전하게
-     * 옮길 수 없다. 억지로 끼우면 엉뚱한 분류가 뜬다.
+     * <p>몰 카테고리 원문은 {@code subCategory} 에 그대로 두고, 그 원문과 상품명으로
+     * {@code Category} 를 분류해 넣는다({@link DataServerCategoryMapper}). 분류 근거가 없으면
+     * 비워 둔다. 억지로 끼우면 엉뚱한 분류가 뜬다.
      */
     @Transactional
     @CacheEvict(value = "productList", allEntries = true)
@@ -101,6 +103,13 @@ public class ProductTagRegistry {
         }
         if (hasText(source.category())) {
             product.setSubCategory(truncate(source.category(), 100));
+        }
+        // 카테고리 화면이 이 값으로 거른다. 저장해 둔 몰 카테고리와 상품명으로 분류해서,
+        // 검색 응답처럼 카테고리가 빈 때도 상세에서 받아 둔 경로를 쓴다.
+        // 분류 못 하면 기존 값을 그대로 둔다.
+        Category category = DataServerCategoryMapper.classify(product.getSubCategory(), product.getName());
+        if (category != null) {
+            product.setCategory(category);
         }
 
         // 구매 링크. 프론트의 "구매하러 가기"와 최저가 표시가 이 값을 쓴다.
