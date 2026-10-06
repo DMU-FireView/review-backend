@@ -30,4 +30,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * Spring 의 Long id 를 FK 로 물고 있다. 이 조회가 그 사이를 잇는 번호표 역할을 한다.
      */
     Optional<Product> findByDataPlatformAndDataProductId(String dataPlatform, String dataProductId);
+
+    /** 홈 목록용. Data 서버 상품만, 최근에 들어온 순 */
+    List<Product> findTop100ByDataPlatformIsNotNullOrderByCreatedAtDesc();
 }
