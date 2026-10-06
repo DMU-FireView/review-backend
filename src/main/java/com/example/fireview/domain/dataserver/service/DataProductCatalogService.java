@@ -70,7 +70,15 @@ public class DataProductCatalogService {
      * 붙잡고 있게 된다. 저장만 짧은 트랜잭션으로 묶는다.
      */
     public List<ProductResponse> search(String keyword) {
-        List<DataServerProduct> merged = interleave(fetchAll(keyword));
+        return search(keyword, limitPerPlatform);
+    }
+
+    /**
+     * 몰당 건수를 정해서 검색한다. 홈 자동 채우기처럼 여러 키워드를 고루 담고 싶을 때
+     * 키워드 하나가 많이 차지하지 않게 줄여 쓴다.
+     */
+    public List<ProductResponse> search(String keyword, int limitPerPlatform) {
+        List<DataServerProduct> merged = interleave(fetchAll(keyword, limitPerPlatform));
         if (merged.isEmpty()) {
             return List.of();
         }
@@ -88,7 +96,7 @@ public class DataProductCatalogService {
      * 몰마다 따로 부르고, 제한 시간 안에 오지 않은 몰은 빈 결과로 친다.
      * 느린 몰 하나(옥션은 30초가 넘게 걸린 적이 있다)가 검색 전체를 붙잡지 않게 한다.
      */
-    private List<List<DataServerProduct>> fetchAll(String keyword) {
+    private List<List<DataServerProduct>> fetchAll(String keyword, int limitPerPlatform) {
         List<CompletableFuture<List<DataServerProduct>>> futures = platforms.stream()
                 .map(platform -> CompletableFuture
                         .supplyAsync(() -> dataServerClient.searchProducts(platform, keyword, limitPerPlatform), executor)

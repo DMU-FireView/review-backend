@@ -31,6 +31,6 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      */
     Optional<Product> findByDataPlatformAndDataProductId(String dataPlatform, String dataProductId);
 
-    /** 홈 목록용. Data 서버 상품만, 최근에 들어온 순 */
-    List<Product> findTop100ByDataPlatformIsNotNullOrderByCreatedAtDesc();
+    /** 홈 목록 후보. Data 서버 상품만, 최근에 들어온 순. 이 중에서 분야를 섞어 고른다 */
+    List<Product> findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();
 }

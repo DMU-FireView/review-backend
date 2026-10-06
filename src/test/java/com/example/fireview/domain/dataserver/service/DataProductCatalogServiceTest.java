@@ -75,6 +75,17 @@ class DataProductCatalogServiceTest {
     }
 
     @Test
+    void 몰당_건수를_지정하면_그_수로_요청한다() {
+        // 홈 자동 채우기는 키워드 하나가 홈을 다 차지하지 않게 적게 받는다
+        when(client.searchProducts(anyString(), anyString(), anyInt())).thenReturn(List.of(p("kurly", "1")));
+
+        service("kurly,oliveyoung", 2000).search("마스크팩", 3);
+
+        verify(client).searchProducts("kurly", "마스크팩", 3);
+        verify(client).searchProducts("oliveyoung", "마스크팩", 3);
+    }
+
+    @Test
     void 같은_상품이_두_번_오면_한_번만_남긴다() {
         when(client.searchProducts(eq("kurly"), anyString(), anyInt()))
                 .thenReturn(List.of(p("kurly", "1"), p("kurly", "1")));

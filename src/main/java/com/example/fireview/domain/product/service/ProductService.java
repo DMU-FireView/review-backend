@@ -12,7 +12,13 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -40,17 +46,46 @@ public class ProductService {
      * 가짜를 구분할 수 없다. 아직 하나도 없을 때만 기존 더미를 보여준다 — 빈 홈보다는 낫다.
      *
      * <p>Data 서버에는 "수집된 상품 전체 목록" API 가 없어서, 검색으로 들어와 번호표가
-     * 붙은 상품이 홈의 원천이다. 검색이 쌓일수록 홈이 채워진다. 최근 100건만 보인다.
+     * 붙은 상품이 홈의 원천이다. 홈 자동 채우기({@code HomeCatalogRefresher})와 사용자 검색으로
+     * 쌓인다.
+     *
+     * <p>최근 300건에서 대분류별로 번갈아 100건을 고른다. 최근 순으로만 자르면 마지막 검색
+     * 키워드 두세 개가 홈을 다 차지한다. 분류가 없는 상품도 한 묶음으로 끼워 넣는다.
      *
      * <p>캐시는 검색·상세 조회로 표시 정보가 바뀔 때 {@code ProductTagRegistry} 가 비운다.
      */
     @Cacheable(value = "productList", key = "'all'")
     public List<ProductResponse> getAllProducts() {
-        List<Product> fromDataServer = productRepository.findTop100ByDataPlatformIsNotNullOrderByCreatedAtDesc();
-        List<Product> source = fromDataServer.isEmpty() ? productRepository.findAll() : fromDataServer;
+        List<Product> fromDataServer = productRepository.findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();
+        List<Product> source = fromDataServer.isEmpty()
+                ? productRepository.findAll()
+                : mixByMajorCategory(fromDataServer, HOME_SIZE);
         return source.stream()
                 .map(ProductResponse::from)
                 .toList();
+    }
+
+    private static final int HOME_SIZE = 100;
+
+    /**
+     * 대분류별로 묶어 한 개씩 번갈아 꺼낸다. 묶음 순서와 묶음 안 순서는 입력(최근 순)을 따른다.
+     */
+    static List<Product> mixByMajorCategory(List<Product> newestFirst, int limit) {
+        Map<Object, Deque<Product>> groups = new LinkedHashMap<>();
+        for (Product p : newestFirst) {
+            Object key = p.getCategory() == null ? "NONE" : p.getCategory().getMajor();
+            groups.computeIfAbsent(key, k -> new ArrayDeque<>()).add(p);
+        }
+        List<Product> out = new ArrayList<>(Math.min(limit, newestFirst.size()));
+        while (out.size() < limit && !groups.isEmpty()) {
+            Iterator<Deque<Product>> it = groups.values().iterator();
+            while (it.hasNext() && out.size() < limit) {
+                Deque<Product> group = it.next();
+                out.add(group.poll());
+                if (group.isEmpty()) it.remove();
+            }
+        }
+        return out;
     }
 
     /** 로컬 DB 상품명 검색 (platformLinks JOIN FETCH로 LazyInit 방지) */
