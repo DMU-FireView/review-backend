@@ -1,7 +1,6 @@
 package com.example.fireview.domain.ai.service;
 
 import com.example.fireview.domain.ai.client.AiServerClient;
-import com.example.fireview.domain.ai.dto.response.ProductAnalysisResponse;
 import com.example.fireview.domain.notification.service.NotificationService;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import com.example.fireview.domain.review.repository.ReviewRepository;
@@ -61,11 +60,10 @@ class AiAnalysisServiceTest {
         when(aiServerClient.analyzeProductRiskReport(any())).thenReturn(null);
 
         AiAnalysisService service = new AiAnalysisService(
-                aiServerClient, productRepository, reviewRepository, notificationService, userService, executor);
+                aiServerClient, productRepository, reviewRepository, notificationService, userService, executor, new com.example.fireview.domain.ai.support.TestTransactionManager());
 
-        ProductAnalysisResponse response = service.analyzeProduct("p-1", null, null);
-
-        assertThat(response).isNotNull();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.analyzeProduct("p-1", null, null))
+                .isInstanceOf(com.example.fireview.global.exception.CustomException.class);
         assertThat(allStarted.getCount()).as("세 호출이 모두 시작되어야 한다").isZero();
         assertThat(threadNames)
                 .as("호출은 주입된 executor 스레드에서 실행되어야 한다")
@@ -80,6 +78,6 @@ class AiAnalysisServiceTest {
         if (!released) {
             throw new IllegalStateException("다른 호출이 시작되지 않음 — 순차 실행으로 의심됨");
         }
-        return null; // safeCall 이 null 을 그대로 통과시키고 ProductAnalysisResponse.of 는 null 을 허용한다
+        return null;
     }
 }

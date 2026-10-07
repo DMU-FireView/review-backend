@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * 프론트엔드 전달용 개별 리뷰 분석 결과 DTO
  *
  * AI 서버 응답(AiAnalysisResult)에서 프론트에 필요한 필드만 선별합니다.
