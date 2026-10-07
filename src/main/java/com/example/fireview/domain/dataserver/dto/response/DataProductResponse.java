@@ -9,7 +9,9 @@ import java.util.List;
  * <ul>
  *   <li>상품의 주인이 Data 서버다. Spring 은 조합만 한다</li>
  *   <li>{@code collectionStatus} 가 있다. 데이터가 없거나 오래된 상태를 숨기지 않는다</li>
- *   <li>{@code analysis} 가 비어 있다. 신뢰도 분석은 아직 어느 서버도 제공하지 않는다</li>
+ *   <li>{@code analysisStatus} 가 있다. 분석 진행 상태는 늘 여기서 본다</li>
+ *   <li>{@code analysis} 는 <b>분석 결과가 있을 때만</b> 객체다. 점수는 리뷰마다 {@code reviews.items[]} 에 붙는다.
+ *       상품 단위 평균 RTI·등급은 아직 없다</li>
  * </ul>
  *
  * @param collectionStatus 수집 신선도. {@code QUEUED} 면 {@code product} 가 null 이다
@@ -17,7 +19,8 @@ import java.util.List;
  * @param product          상품 정보. {@code QUEUED}·{@code UNAVAILABLE} 이면 null
  * @param reviews          리뷰 한 페이지
  * @param job              수집 job. 진행 중일 때만 들어온다
- * @param analysis         신뢰도 분석. 현재는 항상 null
+ * @param analysisStatus   신뢰도 분석 상태. null 이 아니다 — 모르면 {@code UNAVAILABLE}
+ * @param analysis         분석 결과 정보. {@link #hasAnalysisResult} 일 때만 객체, 그 밖에는 null
  */
 public record DataProductResponse(
         CollectionStatus collectionStatus,
@@ -25,8 +28,43 @@ public record DataProductResponse(
         DataProductDetail product,
         ReviewPage reviews,
         CollectionJobStatus job,
-        Object analysis
+        AnalysisStatus analysisStatus,
+        ProductAnalysis analysis
 ) {
+
+    /**
+     * {@code analysis} 를 객체로 내릴 상태인지.
+     *
+     * <p><b>{@code analysis != null} 은 "분석 결과 있음"이라는 기존 뜻을 지킨다.</b>
+     * 배포된 프론트는 {@code analysis != null} 로 결과 유무를 판단하고, 아니면 "분석 대기"
+     * 안내를 그린다. 상태와 상관없이 객체를 내리면 미분석 상품에서도 안내가 사라진다.
+     * 진행 상태는 {@code analysisStatus} 로 따로 준다.
+     *
+     * <p>{@code STALE} 은 넣지 않는다. Data 서버(analysis_repository.status)는
+     * 상태가 {@code done} 일 때만 {@code results} 를 채우고, stale 이면 빈 배열을 보낸다.
+     * 보여줄 결과가 없으므로 결과 없음과 같다.
+     */
+    public static boolean hasAnalysisResult(AnalysisStatus status) {
+        return status == AnalysisStatus.DONE;
+    }
+
+    /**
+     * 분석 결과가 있는 상품의 분석 정보. 상태는 늘 {@code DONE} 이다.
+     *
+     * <p>상품 평균 RTI·등급은 넣지 않는다. Data 서버가 주는 결과는 지금 리뷰 페이지 것뿐이라
+     * Spring 이 평균을 내면 20건 표본 평균이 된다. Data 서버가 전체로 계산해 줄 때 붙인다.
+     *
+     * @param status        분석 상태. 지금은 {@code DONE} 뿐이다
+     * @param modelVersion  분석한 AI 모델 버전
+     * @param policyVersion 등급 정책 버전 (예: {@code rti-v0})
+     * @param reviewCount   분석 job 에 들어간 리뷰 전체 수. 상품 리뷰 수와 다를 수 있다. 모르면 null
+     */
+    public record ProductAnalysis(
+            AnalysisStatus status,
+            String modelVersion,
+            String policyVersion,
+            Integer reviewCount
+    ) {}
 
     /**
      * @param externalId {@code "{platform}-{productId}"}. 챗봇·알림처럼 식별자를 한 칸에
@@ -55,7 +93,11 @@ public record DataProductResponse(
     public record ReviewPage(List<DataReview> items, String nextCursor) {}
 
     /**
-     * @param rating 5점 만점 환산. 소수점이 올 수 있다 (예: 4.5)
+     * @param rating  5점 만점 환산. 소수점이 올 수 있다 (예: 4.5)
+     * @param rti     이 리뷰의 RTI (0~100). 분석 결과가 없거나 계산 불가면 null. 0 으로 채우지 않는다
+     * @param level   이 리뷰의 등급. Data 서버 값 그대로 {@code safe}/{@code warn}/{@code danger}.
+     *                결과가 없거나 계산 불가면 null
+     * @param reasons 판단 근거. 결과가 없으면 빈 배열
      */
     public record DataReview(
             String reviewId,
@@ -65,7 +107,10 @@ public record DataProductResponse(
             String writtenAt,
             String option,
             List<String> images,
-            Integer helpfulCount
+            Integer helpfulCount,
+            Double rti,
+            String level,
+            List<String> reasons
     ) {}
 
     /**

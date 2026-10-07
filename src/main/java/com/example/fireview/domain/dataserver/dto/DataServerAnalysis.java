@@ -1,0 +1,64 @@
+package com.example.fireview.domain.dataserver.dto;
+
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * 상품 응답에 붙어 오는 신뢰도 분석 상태 ({@code analysis}).
+ *
+ * <p>Data 서버가 AI 서버를 불러 리뷰별 RTI 를 저장해 두고, 상품 조회 때 함께 내려준다.
+ *
+ * <table>
+ *   <tr><th>status</th><th>의미</th></tr>
+ *   <tr><td>{@code disabled}</td><td>Data 서버에서 분석 기능이 꺼져 있다</td></tr>
+ *   <tr><td>{@code not_analyzed}</td><td>분석 job 이 아직 없다</td></tr>
+ *   <tr><td>{@code queued} / {@code running}</td><td>분석 중</td></tr>
+ *   <tr><td>{@code done}</td><td>완료. {@code results} 가 채워진다</td></tr>
+ *   <tr><td>{@code failed}</td><td>분석 실패</td></tr>
+ *   <tr><td>{@code stale}</td><td>마지막 분석 뒤 리뷰나 모델이 바뀌었다. 결과는 오지 않는다</td></tr>
+ * </table>
+ *
+ * <p><b>{@code results} 는 이번 응답의 리뷰 페이지에 있는 리뷰만 담긴다.</b>
+ * 상품 전체 결과가 아니므로 이걸로 상품 평균을 내면 한 페이지 표본 평균이 된다.
+ *
+ * @param reviewCount 분석 job 에 들어간 리뷰 전체 수. job 이 없으면 0
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public record DataServerAnalysis(
+        String status,
+        Job job,
+        @JsonProperty("input_hash") String inputHash,
+        @JsonProperty("model_version") String modelVersion,
+        @JsonProperty("policy_version") String policyVersion,
+        @JsonProperty("review_count") Integer reviewCount,
+        List<DataServerReviewAnalysis> results
+) {
+
+    public DataServerAnalysis {
+        results = results == null ? List.of() : results;
+    }
+
+    /** 분석 job. 상품 조회 응답의 수집 job 과는 다른 것이다 */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Job(
+            Long id,
+            String status,
+            @JsonProperty("attempt_count") Integer attemptCount,
+            @JsonProperty("ai_job_id") String aiJobId,
+            @JsonProperty("input_review_count") Integer inputReviewCount,
+            @JsonProperty("last_error") String lastError,
+            @JsonProperty("completed_at") String completedAt
+    ) {}
+
+    /** 리뷰 id 로 결과를 찾을 수 있게 묶는다. 같은 id 가 두 번 오면 앞의 것을 쓴다 */
+    public Map<String, DataServerReviewAnalysis> resultsByReviewId() {
+        return results.stream()
+                .filter(r -> r.reviewId() != null)
+                .collect(Collectors.toMap(DataServerReviewAnalysis::reviewId, Function.identity(), (a, b) -> a));
+    }
+}

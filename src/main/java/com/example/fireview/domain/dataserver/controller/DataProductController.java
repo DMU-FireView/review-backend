@@ -54,8 +54,13 @@ public class DataProductController {
             아직 아무도 찜하지 않은 상품은 번호가 없다. 상품을 열어보기만 해도 번호를 만들면
             빈 행이 계속 쌓이므로 그렇게 하지 않는다.
 
-            **`analysis` 는 현재 항상 null 이다.** 신뢰도 분석(RTI·등급·사유)은 Data 서버도
-            AI 서버도 아직 제공하지 않는다. 자리만 잡아둔 것이다.
+            **신뢰도 분석은 리뷰마다 붙는다.** `analysisStatus` 가 `DONE` 일 때만 리뷰별
+            `rti`·`level`·`reasons` 가 채워지고, 그 밖에는 `rti`·`level` 이 null, `reasons` 가
+            빈 배열이다. `DONE` 이어도 계산 불가인 리뷰는 null 이다. `level` 은 `safe`/`warn`/`danger`
+            원문 그대로다. 진행 상태는 `analysisStatus` 로 늘 오고, 모르면 `UNAVAILABLE` 이다.
+            `analysis` 는 결과가 있을 때(`DONE`)만 객체이고 그 밖에는 null 이다
+            (`analysis != null` = 결과 있음, 기존 뜻 그대로).
+            **상품 단위 평균 RTI·등급은 아직 없다.** 리뷰 한 페이지 값으로 평균을 내지 말 것.
 
             리뷰는 cursor 페이지네이션이다. 응답의 `reviews.nextCursor` 를 다음 요청의
             `cursor` 에 그대로 넣는다. null 이면 마지막 페이지다.

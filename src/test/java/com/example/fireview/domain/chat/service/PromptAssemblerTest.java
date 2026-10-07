@@ -56,4 +56,11 @@ class PromptAssemblerTest {
                 .contains("[비슷한 상품 추천]")
                 .contains("상품 이름, 가격, 링크, 상품 번호를 지어내거나 본문에 적지 마라");
     }
+
+    @Test
+    void 리뷰_한_건의_점수를_상품_등급처럼_말하지_말라고_한다() {
+        // 대표 리뷰에만 RTI 가 붙고 상품 평균은 없다. 모델이 리뷰 점수를 상품 등급으로 옮기면 안 된다
+        assertThat(assembler.systemPrompt())
+                .contains("대표리뷰의 RTI와 등급은 그 리뷰 한 건의 값이다");
+    }
 }

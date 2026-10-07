@@ -19,13 +19,17 @@ import java.util.List;
  *
  * <p>{@code stale} 을 실패로 다루면 안 된다. 쓸 수 있는 데이터가 들어 있고,
  * 매번 최신을 기다리면 화면이 크롤링 속도에 묶인다.
+ *
+ * <p>{@code analysis} 는 신뢰도 분석 상태다({@link DataServerAnalysis}). 위 {@code status}
+ * (수집 신선도)와는 별개다. 분석 기능이 들어오기 전 Data 서버는 이 필드를 보내지 않으므로 null 일 수 있다.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DataServerProductResponse(
         String status,
         DataServerProduct product,
         Reviews reviews,
-        DataServerJob job
+        DataServerJob job,
+        DataServerAnalysis analysis
 ) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)

@@ -1,0 +1,26 @@
+{
+  "status": "fresh",
+  "product": {"platform": "kurly", "product_id": "1000146248", "name": "샘플 상품", "url": "https://kurly.com/p", "brand": "브랜드", "manufacturer": null, "seller": null, "price": 29900, "thumbnail_url": "https://img", "category": "식품 > 간편식", "review_count": 128, "rating": 4.5, "last_collected_at": "2026-10-05T00:00:00+09:00", "new_field": 1},
+  "reviews": {"items": [
+    {"review_id": "r-1", "content": "맛있어요", "rating": 5.0, "author": "user**", "written_at": "2026-10-01T10:00:00+09:00", "option": null, "images": [], "helpful_count": 3},
+    {"review_id": "r-2", "content": "그저 그래요", "rating": 3.0, "author": "kim**", "written_at": "2026-10-02T10:00:00+09:00", "option": null, "images": [], "helpful_count": 0},
+    {"review_id": "r-3", "content": "광고 같아요", "rating": 5.0, "author": "lee**", "written_at": "2026-10-03T10:00:00+09:00", "option": null, "images": [], "helpful_count": 0}
+  ], "next_cursor": "next-1"},
+  "analysis": {
+    "status": "done",
+    "job": {"id": 31, "platform": "kurly", "product_id": "1000146248", "status": "done", "attempt_count": 1,
+            "ai_job_id": "ai-7f3a", "input_review_count": 128, "last_error": null,
+            "completed_at": "2026-10-06T03:00:00+00:00", "unknown_job_field": true},
+    "input_hash": "sha256:abc",
+    "model_version": "rti-model-0.5",
+    "policy_version": "rti-v0",
+    "review_count": 128,
+    "results": [
+      {"review_id": "r-1", "rti": 82.5, "level": "safe", "text_score": 80.0, "behavior_score": null,
+       "network_score": 90.0, "reasons": ["TEXT_SPECIFIC_DETAIL"], "unknown_result_field": "x"},
+      {"review_id": "r-3", "rti": null, "level": null, "text_score": null, "behavior_score": null,
+       "network_score": null, "reasons": []}
+    ],
+    "unknown_analysis_field": {"a": 1}
+  }
+}

@@ -2,10 +2,13 @@ package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.client.DataServerClient;
+import com.example.fireview.domain.dataserver.dto.DataServerAnalysis;
 import com.example.fireview.domain.dataserver.dto.DataServerJob;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
 import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import com.example.fireview.domain.dataserver.dto.DataServerReview;
+import com.example.fireview.domain.dataserver.dto.DataServerReviewAnalysis;
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.dataserver.dto.response.CollectionStatus;
 import com.example.fireview.domain.dataserver.dto.response.DataProductResponse;
 import com.example.fireview.domain.product.entity.Product;
@@ -16,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -51,11 +55,13 @@ public class DataProductService {
             // 없는 것과 못 가져온 것은 프론트가 다르게 다뤄야 한다.
             log.warn("[DataProduct] Data 서버 조회 실패 - key={}", key.asExternalId());
             return new DataProductResponse(CollectionStatus.UNAVAILABLE,
-                    springProductId(key), null, emptyPage(), null, null);
+                    springProductId(key), null, emptyPage(), null,
+                    AnalysisStatus.UNAVAILABLE, null);
         }
 
         DataServerProductResponse body = found.get();
         CollectionStatus status = CollectionStatus.from(body.status());
+        AnalysisStatus analysisStatus = analysisStatus(body.analysis());
 
         // 이미 번호표가 있는 상품이면 홈·검색 목록에 보이는 표시 정보(가격·이미지 등)를
         // 지금 받은 값으로 덮는다. 목록 캐시가 오래 낡지 않게 하는 지점이다.
@@ -71,7 +77,8 @@ public class DataProductService {
                 body.hasUsableData() ? toDetail(key, body.product(), cached) : null,
                 toReviewPage(body),
                 toJob(body.job()),
-                null);   // analysis — 아직 어느 서버도 제공하지 않는다
+                analysisStatus,
+                toAnalysis(analysisStatus, body.analysis()));
     }
 
     /** 수집 진행 상황. QUEUED 를 받은 프론트가 이걸로 완료를 기다린다 */
@@ -125,20 +132,45 @@ public class DataProductService {
         return cached.getAvgRating();
     }
 
+    /** 구버전 Data 서버는 analysis 를 보내지 않는다. null 대신 UNAVAILABLE 로 내려준다 */
+    private static AnalysisStatus analysisStatus(DataServerAnalysis analysis) {
+        return analysis == null ? AnalysisStatus.UNAVAILABLE : AnalysisStatus.from(analysis.status());
+    }
+
+    /** 결과가 없는 상태면 null — 프론트의 {@code analysis != null} 판정을 지킨다 */
+    private DataProductResponse.ProductAnalysis toAnalysis(AnalysisStatus status, DataServerAnalysis analysis) {
+        if (analysis == null || !DataProductResponse.hasAnalysisResult(status)) return null;
+        return new DataProductResponse.ProductAnalysis(
+                status,
+                analysis.modelVersion(),
+                analysis.policyVersion(),
+                analysis.reviewCount());
+    }
+
     private DataProductResponse.ReviewPage toReviewPage(DataServerProductResponse body) {
+        // Data 서버는 이번 페이지의 리뷰 결과만 보내므로 review_id 로 그대로 맞춰 붙인다
+        Map<String, DataServerReviewAnalysis> results = body.analysis() == null
+                ? Map.of()
+                : body.analysis().resultsByReviewId();
         List<DataProductResponse.DataReview> items = body.reviewItems().stream()
-                .map(this::toReview)
+                .map(r -> toReview(r, r.reviewId() == null ? null : results.get(r.reviewId())))
                 .toList();
         String next = body.reviews() == null ? null : body.reviews().nextCursor();
         return new DataProductResponse.ReviewPage(items, next);
     }
 
-    private DataProductResponse.DataReview toReview(DataServerReview r) {
+    /**
+     * @param analysis 이 리뷰의 분석 결과. 없으면 null — 점수를 0 으로 채우지 않고 비워 둔다
+     */
+    private DataProductResponse.DataReview toReview(DataServerReview r, DataServerReviewAnalysis analysis) {
         return new DataProductResponse.DataReview(
                 r.reviewId(), r.content(), r.rating(), r.author(),
                 r.writtenAt(), r.option(),
                 r.images() == null ? List.of() : r.images(),
-                r.helpfulCount());
+                r.helpfulCount(),
+                analysis == null ? null : analysis.rti(),
+                analysis == null ? null : analysis.level(),
+                analysis == null ? List.of() : analysis.reasons());
     }
 
     private DataProductResponse.CollectionJobStatus toJob(DataServerJob job) {
