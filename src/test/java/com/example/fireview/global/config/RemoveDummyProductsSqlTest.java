@@ -50,6 +50,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>잠금 직후의 FK 사전 점검 DO 블록은 pg_constraint·to_regclass 를 쓰는 PostgreSQL 전용이라 H2 에서 실행하지
  * 않는다. 대신 그 블록에 적힌 예상 FK 목록이 엔티티로 만든 H2 스키마의 FK 와 같은지 따로 비교한다.
+ * 상속·파티션 차단과 중복 FK 검사도 PostgreSQL 카탈로그 기준이라 H2 에선 위치만 확인한다.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -167,7 +168,7 @@ class RemoveDummyProductsSqlTest {
     @Test
     void FK_사전_점검의_예상_목록이_엔티티가_만드는_FK와_같다() throws IOException {
         String sql = Files.readString(SQL, StandardCharsets.UTF_8);
-        String guard = sql.substring(sql.indexOf("WITH expected"), sql.indexOf("FK 목록이 예상과 다릅니다"));
+        String guard = sql.substring(sql.indexOf("targets OID[] :="), sql.indexOf("FK 목록이 예상과 다릅니다"));
 
         List<String> expected = new ArrayList<>();
         Matcher fk = EXPECTED_FK.matcher(guard);
@@ -176,10 +177,10 @@ class RemoveDummyProductsSqlTest {
         }
         assertThat(expected).hasSize(12);
 
-        // 점검 대상 테이블(actual 절의 to_regclass 목록) = 이 파일이 DELETE 하는 테이블
-        String actualClause = guard.substring(guard.indexOf("actual AS"));
+        // 점검 대상 테이블(targets 의 to_regclass 목록) = 이 파일이 DELETE 하는 테이블
+        String targets = guard.substring(0, guard.indexOf("]::OID[]"));
         Set<String> guarded = new HashSet<>();
-        Matcher t = GUARDED_TABLE.matcher(actualClause);
+        Matcher t = GUARDED_TABLE.matcher(targets);
         while (t.find()) {
             guarded.add(t.group(1));
         }
@@ -189,6 +190,11 @@ class RemoveDummyProductsSqlTest {
             deleted.add(d.group(1));
         }
         assertThat(guarded).isEqualTo(deleted);
+
+        // 상속·파티션 차단과 FK 대조(중복 포함)는 모두 첫 DELETE 전에 targets 전체를 본다
+        assertThat(guard).contains("c.oid = ANY (targets)", "pg_inherits", "c.relkind <> 'r'", "c.relispartition",
+                "c.confrelid = ANY (targets)", "a.copies > 1");
+        assertThat(sql.indexOf("FK 목록이 예상과 다릅니다")).isLessThan(sql.indexOf("DELETE FROM"));
 
         @SuppressWarnings("unchecked")
         List<Object[]> rows = em.createNativeQuery("""

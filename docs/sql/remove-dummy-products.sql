@@ -1,5 +1,5 @@
 -- PostgreSQL: 과거 DataInitializer 시드로 들어간 더미 상품과 그 리뷰, 종속 행을 정리한다. (#195)
--- 실행 전 백업 및 대상 DB/스키마와 아래 조회 결과를 확인한다.
+-- 실행 전에 아래 "실행 전 체크리스트"를 모두 확인한다.
 --
 -- 판별 조건: 아래 두 조건을 모두 만족하는 상품만 지운다.
 --   1) id 가 더미 구간(fireview.dummy_id_min ~ fireview.dummy_id_max) 안에 있다.
@@ -11,12 +11,28 @@
 --   번호표가 없지만 구간 밖인 상품은 미리보기에 따로 보여 주고 지우지 않는다.
 --   구간 안인데 번호표가 있는 상품이 있으면 중단한다.
 --
--- ⚠️ 실행 절차: 유지보수 시간에 쓰기를 멈추고 실행한다.
---   1) 앱의 상품·리뷰·신고·피드백(리뷰 피드백, 분석 피드백과 신호)·찜·장바구니 쓰기와
---      스키마 변경(배포에 따른 ddl-auto=update 포함)을 멈추고, 진행 중인 트랜잭션이 끝나기를 기다린다.
---   2) 이 파일을 한 세션에서 처음부터 끝까지 바로 실행한다(트랜잭션을 열어 둔 채 두지 않는다).
---   3) deadlock detected, lock_timeout, statement_timeout 으로 실패하면 전체가 롤백된 것이다.
---      원인 트랜잭션이 끝난 뒤 파일 전체를 처음부터 다시 실행한다. 중간부터 이어서 실행하지 않는다.
+-- ⚠️ 실행 전 체크리스트. 하나라도 확인하지 못했으면 실행하지 않는다.
+--   1) 백업을 받고 복원할 수 있는지 확인한다. 아래 "실제 사용자 데이터도 함께 지워진다"의 행 중
+--      남겨야 할 것은 따로 보관한다.
+--   2) 접속 대상을 확인한다. 이 파일은 테이블 이름을 스키마 없이 쓰므로 search_path 로 대상이 정해진다.
+--      current_database(), current_user, current_setting('search_path') 를 보고, 삭제 대상 11개 테이블
+--      (FK 사전 점검의 targets)과 users 가 to_regclass 로 의도한 앱 스키마의 테이블로 풀리는지 확인한 뒤
+--      그 search_path 로 고정해 실행한다. 상속·파티션 관계와 예상 밖 FK 는 아래 점검이 삭제 전에 중단시키지만,
+--      사용자가 만든 DELETE 트리거나 RULE 은 검사하지 않으므로 있으면 따로 검토한다.
+--   3) 유지보수 시간에 쓰기를 멈춘다. 앱·배치·관리자의 상품·리뷰·신고·피드백(리뷰 피드백, 분석 피드백과
+--      신호)·찜·장바구니·조회 이력 쓰기와 스키마 변경(배포에 따른 ddl-auto=update, 마이그레이션 포함)을
+--      멈추고, 진행 중인 트랜잭션이 끝나기를 기다린다.
+--   4) 더미 id 구간과 예상 건수(아래 SET LOCAL)의 근거를 확인하고 미리보기 결과와 대조한다. 대상 상품·리뷰
+--      건수, 구간 안 번호표 있는 상품 0건, 구간 밖 번호표 없는 보존 상품 목록, 종속 테이블별 삭제 건수를 본다.
+--      건수가 다르면 숫자를 바로 고치지 말고 원인부터 확인한다.
+--   5) 전용 세션 하나에서 psql -X -v ON_ERROR_STOP=1 -f 로 파일 전체를 실행한다. 먼저 이 원본(마지막 문장
+--      ROLLBACK)으로 실행해 출력을 로그로 남기고, 검토 후 마지막 문장만 COMMIT 으로 바꾼 사본을 처음부터 다시
+--      실행한다. 트랜잭션을 열어 둔 채 검토하지 않는다.
+--   6) FK·상속 점검, 건수 가드, deadlock detected, lock_timeout, statement_timeout 으로 실패하면 전체가
+--      롤백된 것이다. 세션을 끊거나 ROLLBACK 해 잠금이 풀렸는지 확인하고, 원인을 해결한 뒤 파일 전체를
+--      처음부터 다시 실행한다. 실패한 세션에서 중간부터 이어서 실행하지 않는다.
+--   7) COMMIT 후 실행 후 건수(대상 0건, 구간 밖 보존 건수·사용자 수 불변)를 확인하고 로그를 보관한 뒤
+--      쓰기를 재개한다. FK 가 없는 notifications.target_url 등은 정리되지 않는다.
 --   쓰기를 멈추는 이유: 아래 잠금은 대상 행이 바뀌거나 새 종속 행이 붙는 것을 막지만, 다른 트랜잭션이
 --   reviews 다음 products 처럼 이 파일과 다른 순서로 잠그면 데드락이 날 수 있다. 잠금 순서를 이 파일
 --   쪽에서만 맞춰서는 앱의 모든 트랜잭션과 순서가 맞는다고 보장할 수 없다. 실패해도 전체 롤백이라
@@ -39,6 +55,7 @@
 -- FK 제약은 비활성화하지 않는다. 잠금 직후 FK 목록을 엔티티 기준 12개와 대조해, 다르면 삭제 전에 중단한다.
 --   운영은 ddl-auto=update 라 엔티티에 없는 FK 가 남아 있을 수 있다. ON DELETE CASCADE / SET NULL 인
 --   FK 는 지울 때 오류 없이 다른 행을 지우거나 바꾸므로, 건수 가드로는 잡히지 않는다.
+--   삭제 대상 테이블이 상속·파티션 관계에 있어도 중단한다(엔티티 스키마에는 없다).
 -- 기본은 ROLLBACK이다. 검토 후 실제 반영할 때만 마지막 문장을 COMMIT으로 바꾼다.
 BEGIN;
 
@@ -63,14 +80,41 @@ LOCK TABLE products, reviews IN SHARE ROW EXCLUSIVE MODE;
 
 -- FK 사전 점검. 이 파일이 행을 지우는 테이블을 가리키는 FK 전체가 아래 12개와 정확히 같아야 한다
 -- (2026-10 Hibernate 가 엔티티로 PostgreSQL 16 에 만든 스키마 기준).
--- 하나라도 더 있거나 없거나, 칼럼·대상이 다르거나, ON DELETE / ON UPDATE 가 NO ACTION·RESTRICT 가
--- 아니거나, 지연 검사(DEFERRABLE)이거나, 검증되지 않은(NOT VALID) FK 면 중단한다.
+-- 하나라도 더 있거나 없거나, 같은 FK 가 두 번 이상 있거나, 칼럼·대상이 다르거나, ON DELETE / ON UPDATE 가
+-- NO ACTION·RESTRICT 가 아니거나, 지연 검사(DEFERRABLE)이거나, 검증되지 않은(NOT VALID) FK 면 중단한다.
 -- 제약 이름은 Hibernate 가 해시로 만들어 환경마다 다를 수 있으므로 테이블·칼럼 번호로 비교한다.
 -- 다른 스키마의 테이블이 거는 FK 도 잡힌다. 의도된 FK 라면 검토한 뒤 이 목록과 DELETE 문에 함께 반영한다.
+--
+-- 삭제 대상 테이블이 상속 부모·자식이거나 파티션(테이블)이면 먼저 중단한다. DELETE 는 기본으로 상속 자식
+-- 테이블의 행까지 지우는데, 자식 테이블을 가리키는 FK 는 아래 FK 대조에 잡히지 않는다(FK 는 자식에
+-- 상속되지 않고, 대조는 targets 의 테이블만 본다). 엔티티 스키마에는 상속·파티션이 없으므로 지원하지 않는다.
 DO $$
 DECLARE
+    -- 이 파일이 DELETE 하는 테이블 전체. 지금은 products, reviews, analysis_feedbacks 만 FK 로 참조되지만
+    -- 나머지 테이블에 새 FK 가 붙어도 간접 종속 행이 지워지거나 막히므로 함께 본다.
+    targets OID[] := ARRAY[
+        to_regclass('products'), to_regclass('reviews'), to_regclass('analysis_feedbacks'),
+        to_regclass('analysis_feedback_signals'), to_regclass('review_feedbacks'), to_regclass('reports'),
+        to_regclass('review_reasons'), to_regclass('wishlists'), to_regclass('cart_items'),
+        to_regclass('view_histories'), to_regclass('product_platform_links')]::OID[];
     mismatch TEXT;
 BEGIN
+    SELECT string_agg(c.oid::regclass::TEXT || ' relkind=' || c.relkind::TEXT
+               || CASE WHEN c.relispartition THEN ' partition' ELSE '' END
+               || CASE WHEN EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid)
+                       THEN ' 상속 자식' ELSE '' END
+               || CASE WHEN EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhparent = c.oid)
+                       THEN ' 상속 부모' ELSE '' END, E'\n')
+    INTO mismatch
+    FROM pg_class c
+    WHERE c.oid = ANY (targets)
+      AND (c.relkind <> 'r' OR c.relispartition
+           OR EXISTS (SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid OR i.inhparent = c.oid));
+    IF mismatch IS NOT NULL THEN
+        RAISE EXCEPTION '삭제 대상 테이블에 상속·파티션 관계가 있습니다. 지원하지 않는 구조이므로 검토하세요:%',
+            E'\n' || mismatch;
+    END IF;
+
     WITH expected(child, child_col, parent) AS (VALUES
         ('reviews', 'product_id', 'products'),
         ('wishlists', 'product_id', 'products'),
@@ -94,23 +138,20 @@ BEGIN
                child, child_col, parent
         FROM expected
     ), actual AS (
-        -- 삭제 대상 테이블 전체. 지금은 products, reviews, analysis_feedbacks 만 FK 로 참조되지만
-        -- 나머지 테이블에 새 FK 가 붙어도 간접 종속 행이 지워지거나 막히므로 함께 본다.
-        SELECT c.* FROM pg_constraint c
-        WHERE c.contype = 'f' AND c.confrelid IN (
-            to_regclass('products'), to_regclass('reviews'), to_regclass('analysis_feedbacks'),
-            to_regclass('analysis_feedback_signals'), to_regclass('review_feedbacks'), to_regclass('reports'),
-            to_regclass('review_reasons'), to_regclass('wishlists'), to_regclass('cart_items'),
-            to_regclass('view_histories'), to_regclass('product_platform_links'))
+        -- copies: 칼럼·대상이 같은 FK 의 개수. 예상 FK 마다 정확히 1개여야 한다.
+        SELECT c.*, COUNT(*) OVER (PARTITION BY c.conrelid, c.conkey, c.confrelid, c.confkey) AS copies
+        FROM pg_constraint c
+        WHERE c.contype = 'f' AND c.confrelid = ANY (targets)
     )
     SELECT string_agg(COALESCE(a.conrelid::regclass::TEXT, e.child) || ':' || COALESCE(a.conname, e.child_col)
                || ' -> ' || COALESCE(a.confrelid::regclass::TEXT, e.parent)
-               || ' delete=' || COALESCE(a.confdeltype::TEXT, 'missing'), E'\n')
+               || ' delete=' || COALESCE(a.confdeltype::TEXT, 'missing')
+               || CASE WHEN a.copies > 1 THEN ' copies=' || a.copies ELSE '' END, E'\n')
     INTO mismatch
     FROM e FULL JOIN actual a
       ON a.conrelid = e.child_oid AND a.conkey = e.child_cols
      AND a.confrelid = e.parent_oid AND a.confkey = e.parent_cols
-    WHERE a.oid IS NULL OR e.child_oid IS NULL
+    WHERE a.oid IS NULL OR e.child_oid IS NULL OR a.copies > 1
        OR a.confdeltype NOT IN ('a', 'r') OR a.confupdtype NOT IN ('a', 'r')
        OR a.condeferrable OR NOT a.convalidated;
     IF mismatch IS NOT NULL THEN
