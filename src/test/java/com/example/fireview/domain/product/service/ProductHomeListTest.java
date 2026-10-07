@@ -57,6 +57,21 @@ class ProductHomeListTest {
                 .satisfies(p -> assertThat(p.externalId()).isEqualTo("kurly-1000146248"));
     }
 
+    @Test
+    void 더미를_지운_뒤_상품이_하나도_없으면_빈_목록이다() {
+        // 운영 더미 정리(#195) 직후 Data 서버 상품이 아직 쌓이지 않은 상태
+        assertThat(productService.getAllProducts()).isEmpty();
+    }
+
+    @Test
+    void 더미를_지운_뒤_DB_검색은_실제_상품만_찾는다() {
+        tag(1L, "1000146248");
+
+        assertThat(productService.searchProducts("실상품")).singleElement()
+                .satisfies(p -> assertThat(p.externalId()).isEqualTo("kurly-1000146248"));
+        assertThat(productService.searchProducts("더미")).isEmpty();
+    }
+
     private static Product tagged(long id, Category category) {
         return Product.builder().id(id).name("p" + id).dataPlatform("kurly")
                 .dataProductId(String.valueOf(id)).category(category).build();
