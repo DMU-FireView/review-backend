@@ -54,4 +54,6 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // RemoveDummyProductsSqlTest 가 docs/sql 의 SQL 을 읽는다. SQL 만 고쳐도 테스트가 다시 돌게 한다
+    inputs.dir('docs/sql')
 }

@@ -178,7 +178,7 @@ psql "$(echo "$DB_URL" | sed 's|jdbc:||')" -U "$DB_USERNAME"
 ## 📊 현재 DB 상태
 
 ```
-products: 33개 (naverProductId 정상 저장)
+products: 더미 33개(Data 서버 번호표 없음, 과거 DataInitializer 시드) + 번호표가 붙은 실제 상품
 reviews: 1117개 (DataInitializer 생성 더미 데이터)
 users: 자동 시드 계정 생성 없음 (개발 계정은 회원가입으로 생성)
 reports: 테이블 생성됨 (데이터 없음)
@@ -186,12 +186,13 @@ notifications: 테이블 생성됨 (데이터 없음)
 ```
 
 기존 운영 시드 사용자 계정 정리는 `docs/sql/remove-seed-user-account.sql`을 검토 후 수동으로 진행한다.
+더미 상품·리뷰 정리는 `docs/sql/remove-dummy-products.sql`을 백업 후 검토하여 수동으로 진행한다(#195). 더미에 붙은 사용자 찜·장바구니·신고·피드백도 함께 지워진다. 실행 후에는 위 products·reviews 서술을 갱신한다.
 
 ### DB 전체 초기화가 필요할 때 순서
 ```bash
 TRUNCATE TABLE notifications, reports, review_feedbacks, review_reasons, reviews,
                product_platform_links, products, users CASCADE;
-# 서버 재시작 → DataInitializer 자동 실행
+# 서버 재시작. DataInitializer 는 prod·test 프로파일에서 돌지 않으므로 운영에는 더미가 다시 생기지 않는다
 docker restart fireview
 ```
 

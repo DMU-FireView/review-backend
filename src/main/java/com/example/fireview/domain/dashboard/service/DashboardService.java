@@ -103,7 +103,9 @@ public class DashboardService {
             if (!preferred.isEmpty()) {
                 return productRepository.findByCategoryIn(preferred.stream().toList())
                         .stream()
-                        .filter(p -> p.getAvgRti() >= minScore)
+                        // 분석 전(avgRti null) 상품은 최소 신뢰도를 넘는지 알 수 없다. 예전에는 더미가
+                        // 모두 avgRti 를 가져 드러나지 않았지만, 실제 상품만 남으면 언박싱에서 NPE 가 난다
+                        .filter(p -> p.getAvgRti() != null && p.getAvgRti() >= minScore)
                         .sorted((a, b) -> Double.compare(b.getAvgRti(), a.getAvgRti()))
                         .limit(10)
                         .map(ProductResponse::from)
