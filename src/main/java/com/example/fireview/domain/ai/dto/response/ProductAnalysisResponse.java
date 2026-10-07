@@ -3,6 +3,7 @@ package com.example.fireview.domain.ai.dto.response;
 import java.util.List;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * 백엔드 → 프론트엔드 분석 결과 응답 DTO
  * AI 서버의 3가지 분석 결과를 통합해서 반환합니다.
  *

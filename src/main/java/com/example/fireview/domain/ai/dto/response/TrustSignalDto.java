@@ -1,6 +1,7 @@
 package com.example.fireview.domain.ai.dto.response;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * 주요 판단 신호 DTO (프론트엔드 TrustSignal 엔티티 매핑)
  *
  * product-detail 분석 결과를 집계하여 생성:

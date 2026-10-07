@@ -19,10 +19,15 @@ import com.example.fireview.domain.review.repository.ReviewRepository;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.config.ExecutorConfig;
+import com.example.fireview.global.exception.CustomException;
+import com.example.fireview.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -32,6 +37,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * AI 분석 서비스
  *
  * 명세서 v11.0 의 트리거 원칙을 따른다:
@@ -55,19 +61,22 @@ public class AiAnalysisService {
     private final NotificationService notificationService;
     private final UserService userService;
     private final Executor aiCallExecutor;
+    private final TransactionTemplate transactionTemplate;
 
     public AiAnalysisService(AiServerClient aiServerClient,
                              ProductRepository productRepository,
                              ReviewRepository reviewRepository,
                              NotificationService notificationService,
                              UserService userService,
-                             @Qualifier(ExecutorConfig.AI_CALL_EXECUTOR) Executor aiCallExecutor) {
+                             @Qualifier(ExecutorConfig.AI_CALL_EXECUTOR) Executor aiCallExecutor,
+                             PlatformTransactionManager transactionManager) {
         this.aiServerClient = aiServerClient;
         this.productRepository = productRepository;
         this.reviewRepository = reviewRepository;
         this.notificationService = notificationService;
         this.userService = userService;
         this.aiCallExecutor = aiCallExecutor;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -78,7 +87,8 @@ public class AiAnalysisService {
      * @param userEmail  분석 요청자 이메일 (null 이면 비로그인 — 알림 미발송)
      * @return 프론트엔드에 전달할 통합 분석 결과
      */
-    @Transactional
+    // 호출자의 트랜잭션도 외부 호출 동안 중단하고, 결과 저장 단계에서만 짧게 시작한다.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public ProductAnalysisResponse analyzeProduct(String productId, String productUrl, String userEmail) {
         log.info("[AI Analysis] 분석 시작: productId={}, productUrl={}", productId, productUrl);
 
@@ -103,15 +113,21 @@ public class AiAnalysisService {
         AiProductRiskReportResponse riskReport =
                 safeCall(() -> aiServerClient.analyzeProductRiskReport(request), "risk-report");
 
-        // AI 분석 결과로 DB 동기화
-        if (riskReport != null && riskReport.sampleReviews() != null && !riskReport.sampleReviews().isEmpty()) {
-            syncReviewsFromRiskReport(productId, riskReport.sampleReviews());
-        } else if (detailResponse != null && detailResponse.results() != null) {
-            updateReviewRtiScores(detailResponse);
+        if (listResponse == null && detailResponse == null && trendResponse == null && riskReport == null) {
+            throw new CustomException(ErrorCode.AI_ANALYSIS_UNAVAILABLE);
         }
-        if (listResponse != null && listResponse.products() != null && !listResponse.products().isEmpty()) {
-            updateProductAvgRti(productId, listResponse.products().get(0));
-        }
+
+        transactionTemplate.executeWithoutResult(status -> {
+            // AI 분석 결과로 DB 동기화
+            if (riskReport != null && riskReport.sampleReviews() != null && !riskReport.sampleReviews().isEmpty()) {
+                syncReviewsFromRiskReport(productId, riskReport.sampleReviews());
+            } else if (detailResponse != null && detailResponse.results() != null) {
+                updateReviewRtiScores(detailResponse);
+            }
+            if (listResponse != null && listResponse.products() != null && !listResponse.products().isEmpty()) {
+                updateProductAvgRti(productId, listResponse.products().get(0));
+            }
+        });
 
         log.info("[AI Analysis] 분석 완료: productId={}", productId);
 

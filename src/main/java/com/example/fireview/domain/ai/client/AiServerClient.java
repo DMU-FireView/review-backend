@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * AI 서버 HTTP 클라이언트
  *
  * 명세서 v11.0 의 5개 AI 분석 API 를 호출한다.

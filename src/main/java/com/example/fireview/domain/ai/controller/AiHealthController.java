@@ -1,33 +1,28 @@
 package com.example.fireview.domain.ai.controller;
 
+import com.example.fireview.global.exception.CustomException;
+import com.example.fireview.global.exception.ErrorCode;
 import com.example.fireview.global.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * AI 서버 연결 상태 확인 컨트롤러
- *
- * ngrok 연동 테스트 시 AI 서버와의 통신 여부를 빠르게 확인할 수 있습니다.
- *
- * [테스트 방법]
- * 1. application.properties에서 ai.server.base-url을 ngrok URL로 변경
- *    예) ai.server.base-url=https://xxxx-xx-xx.ngrok.io
- * 2. GET /api/analysis/health 호출 → AI 서버 응답 확인
+ * 레거시 서버 연결 상태 확인 컨트롤러.
+ * 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  */
 @Slf4j
-@Tag(name = "AI 분석", description = "AI 서버 상태 확인")
+@Tag(name = "AI 분석", description = "레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.")
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor
@@ -45,40 +40,27 @@ public class AiHealthController {
      *
      * @return AI 서버 연결 정보 및 상태
      */
+    @Operation(description = "레거시 서버의 2xx 응답일 때만 status ok를 반환한다. 미도달 또는 비정상 응답은 내부 주소와 예외 원문 없이 공통 503 오류로 반환한다.")
     @GetMapping("/health")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkAiServerHealth() {
         log.info("[AI Health] AI 서버 연결 확인: baseUrl={}", aiServerBaseUrl);
 
-        String status = "unknown";
-        String message = "";
-        long responseTimeMs = -1;
-
         long startTime = System.currentTimeMillis();
+        ResponseEntity<String> upstream;
         try {
-            // AI 서버 루트에 GET 요청 - 응답 여부(404 포함)로 서버 도달 가능 여부 확인
-            restTemplate.getForObject(aiServerBaseUrl, String.class);
-            responseTimeMs = System.currentTimeMillis() - startTime;
-            status = "ok";
-            message = "AI 서버 연결 성공";
-            log.info("[AI Health] 연결 성공: {}ms", responseTimeMs);
-        } catch (HttpClientErrorException | HttpServerErrorException e) {
-            // HTTP 응답이 왔으면 서버는 살아있음 (404, 405 등)
-            responseTimeMs = System.currentTimeMillis() - startTime;
-            status = "ok";
-            message = "AI 서버 연결 성공 (HTTP " + e.getStatusCode().value() + ")";
-            log.info("[AI Health] 서버 응답 확인 ({}): {}ms", e.getStatusCode().value(), responseTimeMs);
+            upstream = restTemplate.getForEntity(aiServerBaseUrl, String.class);
         } catch (Exception e) {
-            responseTimeMs = System.currentTimeMillis() - startTime;
-            status = "error";
-            message = "AI 서버 연결 실패: " + e.getMessage();
             log.warn("[AI Health] 연결 실패: {}", e.getMessage());
+            throw new CustomException(ErrorCode.AI_ANALYSIS_UNAVAILABLE);
+        }
+        if (!upstream.getStatusCode().is2xxSuccessful()) {
+            throw new CustomException(ErrorCode.AI_ANALYSIS_UNAVAILABLE);
         }
 
         Map<String, Object> result = Map.of(
-                "status", status,
-                "message", message,
-                "aiServerUrl", aiServerBaseUrl,
-                "responseTimeMs", responseTimeMs,
+                "status", "ok",
+                "message", "AI 서버 연결 성공",
+                "responseTimeMs", System.currentTimeMillis() - startTime,
                 "checkedAt", LocalDateTime.now().toString()
         );
 

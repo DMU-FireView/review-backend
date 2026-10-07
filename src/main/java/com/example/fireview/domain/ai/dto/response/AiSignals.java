@@ -1,6 +1,7 @@
 package com.example.fireview.domain.ai.dto.response;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * AI 분석 세부 점수 (3개 분야)
  */
 public record AiSignals(

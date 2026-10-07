@@ -11,16 +11,18 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.web.bind.annotation.*;
 
 /**
+ * 레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.
  * AI 분석 컨트롤러
  *
  * 프론트엔드가 productId를 보내면,
  * BE가 AI 서버에 크롤링+분석을 요청하고 결과를 반환합니다.
  */
 @Slf4j
-@Tag(name = "AI 분석", description = "상품 분석 실행 (Data 서버 이관 예정)")
+@Tag(name = "AI 분석", description = "레거시: 새 구조에서는 Data 서버가 ai.re-view.kr 를 호출. 이 경로는 프론트 옛 상세 화면 호환용.")
 @RestController
 @RequestMapping("/api/analysis")
 @RequiredArgsConstructor
@@ -41,6 +43,7 @@ public class AiAnalysisController {
      * @param jwt     로그인 사용자 토큰 (비로그인 시 null — permitAll 엔드포인트)
      * @return 분석 결과 (평균 RTI, 등급, 리뷰 목록, 추이 데이터)
      */
+    @Operation(description = "네 분석 호출이 모두 실패하면 503 오류를 반환하고 저장 및 완료 알림을 생성하지 않는다. 일부 결과가 있으면 기존 통합 응답을 반환한다.")
     @PostMapping("/product")
     public ResponseEntity<ApiResponse<ProductAnalysisResponse>> analyzeProduct(
             @Valid @RequestBody ProductAnalyzeRequest request,
