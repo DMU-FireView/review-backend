@@ -68,8 +68,9 @@ class DataProductServiceTest {
         assertThat(res.product().externalId()).isEqualTo("kurly-1000146248");
         assertThat(res.reviews().items()).hasSize(1);
         assertThat(res.reviews().nextCursor()).isEqualTo("next-1");
-        // 구버전 Data 서버처럼 analysis 가 없으면 null 대신 UNAVAILABLE
-        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        // 구버전 Data 서버처럼 analysis 가 없으면 상태는 UNAVAILABLE, 결과는 null
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        assertThat(res.analysis()).isNull();
         assertThat(res.reviews().items().get(0).rti()).isNull();
         assertThat(res.reviews().items().get(0).level()).isNull();
         assertThat(res.reviews().items().get(0).reasons()).isEmpty();
@@ -113,7 +114,8 @@ class DataProductServiceTest {
         assertThat(res.collectionStatus()).isEqualTo(CollectionStatus.UNAVAILABLE);
         assertThat(res.product()).isNull();
         assertThat(res.reviews().items()).isEmpty();
-        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        assertThat(res.analysis()).isNull();
     }
 
     @Test

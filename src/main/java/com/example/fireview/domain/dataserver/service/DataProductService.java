@@ -56,11 +56,12 @@ public class DataProductService {
             log.warn("[DataProduct] Data 서버 조회 실패 - key={}", key.asExternalId());
             return new DataProductResponse(CollectionStatus.UNAVAILABLE,
                     springProductId(key), null, emptyPage(), null,
-                    DataProductResponse.ProductAnalysis.unavailable());
+                    AnalysisStatus.UNAVAILABLE, null);
         }
 
         DataServerProductResponse body = found.get();
         CollectionStatus status = CollectionStatus.from(body.status());
+        AnalysisStatus analysisStatus = analysisStatus(body.analysis());
 
         // 이미 번호표가 있는 상품이면 홈·검색 목록에 보이는 표시 정보(가격·이미지 등)를
         // 지금 받은 값으로 덮는다. 목록 캐시가 오래 낡지 않게 하는 지점이다.
@@ -76,7 +77,8 @@ public class DataProductService {
                 body.hasUsableData() ? toDetail(key, body.product(), cached) : null,
                 toReviewPage(body),
                 toJob(body.job()),
-                toAnalysis(body.analysis()));
+                analysisStatus,
+                toAnalysis(analysisStatus, body.analysis()));
     }
 
     /** 수집 진행 상황. QUEUED 를 받은 프론트가 이걸로 완료를 기다린다 */
@@ -131,10 +133,15 @@ public class DataProductService {
     }
 
     /** 구버전 Data 서버는 analysis 를 보내지 않는다. null 대신 UNAVAILABLE 로 내려준다 */
-    private DataProductResponse.ProductAnalysis toAnalysis(DataServerAnalysis analysis) {
-        if (analysis == null) return DataProductResponse.ProductAnalysis.unavailable();
+    private static AnalysisStatus analysisStatus(DataServerAnalysis analysis) {
+        return analysis == null ? AnalysisStatus.UNAVAILABLE : AnalysisStatus.from(analysis.status());
+    }
+
+    /** 결과가 없는 상태면 null — 프론트의 {@code analysis != null} 판정을 지킨다 */
+    private DataProductResponse.ProductAnalysis toAnalysis(AnalysisStatus status, DataServerAnalysis analysis) {
+        if (analysis == null || !DataProductResponse.hasAnalysisResult(status)) return null;
         return new DataProductResponse.ProductAnalysis(
-                AnalysisStatus.from(analysis.status()),
+                status,
                 analysis.modelVersion(),
                 analysis.policyVersion(),
                 analysis.reviewCount());

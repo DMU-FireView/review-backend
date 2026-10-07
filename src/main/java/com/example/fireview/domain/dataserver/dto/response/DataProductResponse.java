@@ -9,7 +9,8 @@ import java.util.List;
  * <ul>
  *   <li>상품의 주인이 Data 서버다. Spring 은 조합만 한다</li>
  *   <li>{@code collectionStatus} 가 있다. 데이터가 없거나 오래된 상태를 숨기지 않는다</li>
- *   <li>{@code analysis} 는 분석 상태만 담는다. 점수는 리뷰마다 {@code reviews.items[]} 에 붙는다.
+ *   <li>{@code analysisStatus} 가 있다. 분석 진행 상태는 늘 여기서 본다</li>
+ *   <li>{@code analysis} 는 <b>분석 결과가 있을 때만</b> 객체다. 점수는 리뷰마다 {@code reviews.items[]} 에 붙는다.
  *       상품 단위 평균 RTI·등급은 아직 없다</li>
  * </ul>
  *
@@ -18,7 +19,8 @@ import java.util.List;
  * @param product          상품 정보. {@code QUEUED}·{@code UNAVAILABLE} 이면 null
  * @param reviews          리뷰 한 페이지
  * @param job              수집 job. 진행 중일 때만 들어온다
- * @param analysis         신뢰도 분석 상태. null 이 아니다 — 모르면 {@code UNAVAILABLE}
+ * @param analysisStatus   신뢰도 분석 상태. null 이 아니다 — 모르면 {@code UNAVAILABLE}
+ * @param analysis         분석 결과 정보. {@link #hasAnalysisResult} 일 때만 객체, 그 밖에는 null
  */
 public record DataProductResponse(
         CollectionStatus collectionStatus,
@@ -26,23 +28,35 @@ public record DataProductResponse(
         DataProductDetail product,
         ReviewPage reviews,
         CollectionJobStatus job,
+        AnalysisStatus analysisStatus,
         ProductAnalysis analysis
 ) {
 
     /**
-     * 상품의 신뢰도 분석 상태.
+     * {@code analysis} 를 객체로 내릴 상태인지.
      *
-     * <p><b>null 대신 {@code UNAVAILABLE} 을 쓴다.</b> 구버전 Data 서버가 {@code analysis} 를
-     * 보내지 않거나 Data 서버에 닿지 못한 경우다. null 로 두면 "분석 결과 없음"과
-     * "분석 상태를 모름"이 같아 보이고, 프론트가 매번 null 분기를 따로 짜야 한다.
-     * {@code collectionStatus} 의 {@code UNAVAILABLE} 과 같은 방식이다.
+     * <p><b>{@code analysis != null} 은 "분석 결과 있음"이라는 기존 뜻을 지킨다.</b>
+     * 배포된 프론트는 {@code analysis != null} 로 결과 유무를 판단하고, 아니면 "분석 대기"
+     * 안내를 그린다. 상태와 상관없이 객체를 내리면 미분석 상품에서도 안내가 사라진다.
+     * 진행 상태는 {@code analysisStatus} 로 따로 준다.
+     *
+     * <p>{@code STALE} 은 넣지 않는다. Data 서버(analysis_repository.status)는
+     * 상태가 {@code done} 일 때만 {@code results} 를 채우고, stale 이면 빈 배열을 보낸다.
+     * 보여줄 결과가 없으므로 결과 없음과 같다.
+     */
+    public static boolean hasAnalysisResult(AnalysisStatus status) {
+        return status == AnalysisStatus.DONE;
+    }
+
+    /**
+     * 분석 결과가 있는 상품의 분석 정보. 상태는 늘 {@code DONE} 이다.
      *
      * <p>상품 평균 RTI·등급은 넣지 않는다. Data 서버가 주는 결과는 지금 리뷰 페이지 것뿐이라
      * Spring 이 평균을 내면 20건 표본 평균이 된다. Data 서버가 전체로 계산해 줄 때 붙인다.
      *
-     * @param status        분석 상태
-     * @param modelVersion  분석한 AI 모델 버전. 분석 job 이 없으면 null
-     * @param policyVersion 등급 정책 버전 (예: {@code rti-v0}). 분석 job 이 없으면 null
+     * @param status        분석 상태. 지금은 {@code DONE} 뿐이다
+     * @param modelVersion  분석한 AI 모델 버전
+     * @param policyVersion 등급 정책 버전 (예: {@code rti-v0})
      * @param reviewCount   분석 job 에 들어간 리뷰 전체 수. 상품 리뷰 수와 다를 수 있다. 모르면 null
      */
     public record ProductAnalysis(
@@ -50,11 +64,7 @@ public record DataProductResponse(
             String modelVersion,
             String policyVersion,
             Integer reviewCount
-    ) {
-        public static ProductAnalysis unavailable() {
-            return new ProductAnalysis(AnalysisStatus.UNAVAILABLE, null, null, null);
-        }
-    }
+    ) {}
 
     /**
      * @param externalId {@code "{platform}-{productId}"}. 챗봇·알림처럼 식별자를 한 칸에

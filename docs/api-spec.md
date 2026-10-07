@@ -410,6 +410,7 @@ Data 서버가 `(platform, productId)` 로 상품을 가리키므로 프론트�
     "nextCursor": "eyJ3cml0..."
   },
   "job": null,
+  "analysisStatus": "DONE",
   "analysis": { "status": "DONE", "modelVersion": "rti-model-0.5",
                 "policyVersion": "rti-v0", "reviewCount": 128 }
 }
@@ -417,7 +418,7 @@ Data 서버가 `(platform, productId)` 로 상품을 가리키므로 프론트�
 
 - **`springProductId` 는 null 일 수 있다.** 찜·장바구니에 쓸 Spring 쪽 번호인데, 아직 아무도 찜하지 않은 상품은 번호가 없다. 열어보기만 해도 번호를 만들면 빈 행이 계속 쌓이므로 그렇게 하지 않는다.
 - **`product.reviewCount`·`rating` 은 null 일 수 있다.** 11번가·올리브영은 Data 서버 상세 응답에서 이 값을 비운다. 목록(검색)에서 받아 둔 값이 있으면 서버가 그 값으로 채우고, 그것도 없으면 null 이다. null 은 "0개"가 아니라 "모름"으로 표시한다.
-- **신뢰도 분석은 리뷰마다 붙는다.** `analysis` 는 상태(`DONE`·`QUEUED`·`RUNNING`·`NOT_ANALYZED`·`STALE`·`FAILED`·`DISABLED`·`UNAVAILABLE`)와 모델·정책 버전만 담고 **null 로 오지 않는다**(상태를 모르면 `UNAVAILABLE`). 리뷰별 `rti`·`level`·`reasons` 는 `DONE` 일 때만 채워지고, 그 밖에는 `rti`·`level` 이 null, `reasons` 가 빈 배열이다. `level` 은 Data 원문 `safe`/`warn`/`danger` 그대로다(경계 70/40). **상품 단위 평균 RTI·등급은 아직 없다** — 결과가 리뷰 한 페이지 것뿐이라 화면에서 평균을 내면 안 된다. 자세한 화면 처리는 [frontend-v2-migration.md](frontend-v2-migration.md) 3절.
+- **신뢰도 분석은 리뷰마다 붙는다.** 분석 진행 상태는 `analysisStatus`(`DONE`·`QUEUED`·`RUNNING`·`NOT_ANALYZED`·`STALE`·`FAILED`·`DISABLED`·`UNAVAILABLE`)로 **늘 온다**(모르면 `UNAVAILABLE`). `analysis` 는 **결과가 있을 때(`DONE`)만** 모델·정책 버전을 담은 객체이고 그 밖에는 **null** 이다 — `analysis != null` 이 "분석 결과 있음"이라는 기존 뜻을 지킨다. 리뷰별 `rti`·`level`·`reasons` 는 `DONE` 일 때만 채워지고, 그 밖에는 `rti`·`level` 이 null, `reasons` 가 빈 배열이다. `level` 은 Data 원문 `safe`/`warn`/`danger` 그대로다(경계 70/40). **상품 단위 평균 RTI·등급은 아직 없다** — 결과가 리뷰 한 페이지 것뿐이라 화면에서 평균을 내면 안 된다. 자세한 화면 처리는 [frontend-v2-migration.md](frontend-v2-migration.md) 3절.
 - 리뷰는 **cursor 페이지네이션**이다. `reviews.nextCursor` 를 다음 요청의 `?cursor=` 에 그대로 넣는다. null 이면 마지막 페이지다.
 
 **POST `/api/v2/products/{platform}/{productId}/tag`** — **인증 필요**

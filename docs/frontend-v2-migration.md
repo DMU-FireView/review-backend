@@ -120,8 +120,9 @@ TTL(상품 24h / 리뷰 6h)이 지났을 뿐 쓸 수 있는 데이터가 들어 
 ```
 
 > 위 응답은 2026-10-05 운영 서버에서 실제로 받은 값입니다(이미지 URL 만 줄였습니다).
-> 분석 수신(#201) 전이라 `analysis` 가 null 이고 리뷰에 `rti`·`level`·`reasons` 가 없습니다.
+> 분석 수신(#201) 전이라 `analysisStatus` 와 리뷰의 `rti`·`level`·`reasons` 가 없습니다.
 > 지금은 아래 [3. 신뢰도 분석](#신뢰도-분석은-리뷰마다-붙습니다) 의 모양으로 옵니다.
+> 미분석 상품은 지금도 `analysis` 가 null 입니다.
 
 `reviewId` 는 **숫자처럼 보여도 문자열**입니다. 쇼핑몰마다 형식이 달라 그대로 문자열로 둡니다.
 
@@ -135,12 +136,18 @@ TTL(상품 24h / 리뷰 6h)이 지났을 뿐 쓸 수 있는 데이터가 들어 
 ### 신뢰도 분석은 리뷰마다 붙습니다
 
 Data 서버가 AI 서버로 리뷰별 RTI 를 계산해 저장하고, Spring 이 상품 조회 때 받아 그대로 넘깁니다.
-응답 두 곳에 나뉘어 옵니다.
+응답 세 곳에 나뉘어 옵니다.
 
-- `analysis` — 상품의 **분석 상태**만 담습니다. **null 로 오지 않습니다.**
+- `analysisStatus` — 상품의 **분석 진행 상태**. **늘 옵니다.** 모르면 `UNAVAILABLE`
+- `analysis` — **분석 결과가 있을 때만** 객체입니다(`analysisStatus: DONE`). 그 밖에는 **null** 입니다.
+  `analysis != null` 이면 결과 있음 — **이전과 같은 뜻**이라 지금 화면의
+  `hasAnalysis = analysis != null` 판정과 "분석 대기" 안내는 그대로 동작합니다.
 - `reviews.items[]` 의 `rti` · `level` · `reasons` — 리뷰 한 건의 결과
 
+분석 결과가 있을 때:
+
 ```json
+"analysisStatus": "DONE",
 "analysis": {
   "status": "DONE",
   "modelVersion": "rti-model-0.5",
@@ -157,24 +164,40 @@ Data 서버가 AI 서버로 리뷰별 RTI 를 계산해 저장하고, Spring 이
 }
 ```
 
-`analysis.status` 값과 화면:
+분석 결과가 없을 때(예: 분석 전):
 
-| 값 | 의미 | 리뷰 `rti`·`level` | 화면 |
-|---|---|---|---|
-| `DONE` | 분석 완료 | 채워짐 (계산 불가인 리뷰는 null) | 리뷰마다 점수·등급 표시 |
-| `QUEUED` / `RUNNING` | 분석 중 | null | "분석 중" |
-| `NOT_ANALYZED` | 분석 job 이 아직 없음 | null | "분석 전" |
-| `STALE` | 마지막 분석 뒤 리뷰나 모델이 바뀜. 새 분석 전까지 결과 없음 | null | "분석 전" 또는 "재분석 대기" |
-| `FAILED` | 분석 실패 | null | "분석 실패" |
-| `DISABLED` | Data 서버에서 분석 기능이 꺼져 있음. 기다려도 안 옴 | null | 신뢰도 영역 숨김 |
-| `UNAVAILABLE` | 분석 상태를 모름 (Data 서버에 못 닿음, 구버전 Data 서버, 모르는 상태값) | null | 신뢰도 영역 숨김 |
+```json
+"analysisStatus": "NOT_ANALYZED",
+"analysis": null,
+"reviews": {
+  "items": [
+    { "reviewId": "r-1", "content": "맛있어요", "...": "...",
+      "rti": null, "level": null, "reasons": [] }
+  ]
+}
+```
 
-- 수집 상태(`collectionStatus`)와 **별개**입니다. `collectionStatus: FRESH` 인데 `analysis.status: NOT_ANALYZED` 일 수 있습니다.
-  `analysis.status` 의 `STALE` 은 수집의 `STALE` 과 달리 **보여줄 결과가 없습니다.**
+`analysisStatus` 값과 화면:
+
+| 값 | 의미 | `analysis` | 리뷰 `rti`·`level` | 화면 |
+|---|---|---|---|---|
+| `DONE` | 분석 완료 | 객체 | 채워짐 (계산 불가인 리뷰는 null) | 리뷰마다 점수·등급 표시 |
+| `QUEUED` / `RUNNING` | 분석 중 | null | null | "분석 중" |
+| `NOT_ANALYZED` | 분석 job 이 아직 없음 | null | null | "분석 전" |
+| `STALE` | 마지막 분석 뒤 리뷰나 모델이 바뀜. 새 분석 전까지 결과 없음 | null | null | "분석 전" 또는 "재분석 대기" |
+| `FAILED` | 분석 실패 | null | null | "분석 실패" |
+| `DISABLED` | Data 서버에서 분석 기능이 꺼져 있음. 기다려도 안 옴 | null | null | 신뢰도 영역 숨김 |
+| `UNAVAILABLE` | 분석 상태를 모름 (Data 서버에 못 닿음, 구버전 Data 서버, 모르는 상태값) | null | null | 신뢰도 영역 숨김 |
+
+`analysisStatus` 를 아직 읽지 않아도 됩니다. 읽지 않으면 `DONE` 이 아닌 상태는 모두 지금처럼
+"분석 대기" 안내로 보입니다. 상태별 문구를 나누고 싶을 때 이 필드를 쓰면 됩니다.
+
+- 수집 상태(`collectionStatus`)와 **별개**입니다. `collectionStatus: FRESH` 인데 `analysisStatus: NOT_ANALYZED` 일 수 있습니다.
+  `analysisStatus` 의 `STALE` 은 수집의 `STALE` 과 달리 **보여줄 결과가 없습니다.**
 - `level` 은 Data 서버 원문 `safe` / `warn` / `danger` 그대로입니다. 한국어 라벨·색은 **프론트가 매핑**합니다.
   경계는 RTI `safe ≥ 70` / `warn ≥ 40` / `danger < 40` 입니다.
 - 리뷰의 `rti`·`level` 이 null 이면 **"판단 불가" 또는 "분석 전"** 입니다. 0점이나 위험으로 그리지 마세요.
-  `analysis.status` 가 `DONE` 인데 null 이면 그 리뷰는 판단할 신호가 부족한 것입니다.
+  `analysisStatus` 가 `DONE` 인데 null 이면 그 리뷰는 판단할 신호가 부족한 것입니다.
 - `reasons` 는 결과가 없으면 빈 배열입니다. `TEXT_*` 같은 코드와 한국어 문장이 섞여 올 수 있습니다.
 - `analysis.reviewCount` 는 **분석 job 에 들어간 리뷰 수**입니다. `product.reviewCount`(쇼핑몰이 알려준 수)와 다를 수 있습니다.
 - **상품 단위 평균 RTI·등급은 아직 없습니다.** 리뷰 결과는 지금 받은 리뷰 페이지 것만 옵니다.

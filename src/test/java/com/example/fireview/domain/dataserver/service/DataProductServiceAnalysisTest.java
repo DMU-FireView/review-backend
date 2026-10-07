@@ -2,6 +2,8 @@ package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerFixtures;
 import com.example.fireview.domain.dataserver.client.DataServerClient;
+import com.example.fireview.domain.dataserver.dto.DataServerAnalysis;
+import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.dataserver.dto.response.CollectionStatus;
 import com.example.fireview.domain.dataserver.dto.response.DataProductResponse;
@@ -11,6 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,8 +39,11 @@ class DataProductServiceAnalysisTest {
     @InjectMocks DataProductService service;
 
     private DataProductResponse callWith(String fixture) {
-        when(dataServerClient.findProduct(any(), any()))
-                .thenReturn(Optional.of(DataServerFixtures.load(fixture)));
+        return callWith(DataServerFixtures.load(fixture));
+    }
+
+    private DataProductResponse callWith(DataServerProductResponse body) {
+        when(dataServerClient.findProduct(any(), any())).thenReturn(Optional.of(body));
         when(registry.find(any())).thenReturn(Optional.empty());
         return service.getProduct("kurly", "1000146248", null);
     }
@@ -51,6 +58,7 @@ class DataProductServiceAnalysisTest {
     void done이면_상태와_버전을_내려준다() {
         DataProductResponse res = callWith("product-analysis-done.json");
 
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.DONE);
         assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.DONE);
         assertThat(res.analysis().modelVersion()).isEqualTo("rti-model-0.5");
         assertThat(res.analysis().policyVersion()).isEqualTo("rti-v0");
@@ -98,29 +106,53 @@ class DataProductServiceAnalysisTest {
 
     @Test
     void Data_상태값을_그대로_올린다() {
-        DataProductResponse notAnalyzed = callWith("product-analysis-not-analyzed.json");
-        assertThat(notAnalyzed.analysis().status()).isEqualTo(AnalysisStatus.NOT_ANALYZED);
-        assertThat(notAnalyzed.analysis().modelVersion()).isNull();
-        assertThat(notAnalyzed.analysis().reviewCount()).isZero();
+        assertThat(callWith("product-analysis-not-analyzed.json").analysisStatus())
+                .isEqualTo(AnalysisStatus.NOT_ANALYZED);
 
         DataProductResponse disabled = callWith("product-analysis-disabled.json");
-        assertThat(disabled.analysis().status()).isEqualTo(AnalysisStatus.DISABLED);
+        assertThat(disabled.analysisStatus()).isEqualTo(AnalysisStatus.DISABLED);
         // 수집 상태(stale)와 분석 상태는 따로 간다
         assertThat(disabled.collectionStatus()).isEqualTo(CollectionStatus.STALE);
         assertThat(disabled.job().id()).isEqualTo(7L);
 
-        DataProductResponse stale = callWith("product-analysis-stale.json");
-        assertThat(stale.analysis().status()).isEqualTo(AnalysisStatus.STALE);
-        assertThat(stale.analysis().modelVersion()).isEqualTo("rti-model-0.4");
+        assertThat(callWith("product-analysis-stale.json").analysisStatus())
+                .isEqualTo(AnalysisStatus.STALE);
+    }
+
+    /**
+     * 배포된 프론트는 {@code analysis != null} 을 "분석 결과 있음"으로 보고, 아니면 "분석 대기"
+     * 안내를 그린다. 결과가 없는 상태에서 객체를 내리면 그 안내가 사라진다.
+     */
+    @ParameterizedTest(name = "{0} → analysis 객체 {1}")
+    @CsvSource({
+            "done,         true,  DONE",
+            "stale,        false, STALE",
+            "not_analyzed, false, NOT_ANALYZED",
+            "disabled,     false, DISABLED",
+            "queued,       false, QUEUED",
+            "running,      false, RUNNING",
+            "failed,       false, FAILED",
+            "archived,     false, UNAVAILABLE",
+    })
+    void 결과가_있을_때만_analysis가_객체다(String raw, boolean hasAnalysis, AnalysisStatus expected) {
+        DataServerProductResponse done = DataServerFixtures.load("product-analysis-done.json");
+        DataServerAnalysis a = done.analysis();
+        DataProductResponse res = callWith(new DataServerProductResponse(
+                done.status(), done.product(), done.reviews(), done.job(),
+                new DataServerAnalysis(raw, a.job(), a.inputHash(), a.modelVersion(),
+                        a.policyVersion(), a.reviewCount(), hasAnalysis ? a.results() : List.of())));
+
+        assertThat(res.analysisStatus()).isEqualTo(expected);
+        assertThat(res.analysis() != null).isEqualTo(hasAnalysis);
+        assertThat(DataProductResponse.hasAnalysisResult(expected)).isEqualTo(hasAnalysis);
     }
 
     @Test
     void analysis가_없는_구버전_응답은_UNAVAILABLE이다() {
         DataProductResponse res = callWith("product-analysis-missing.json");
 
-        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.UNAVAILABLE);
-        assertThat(res.analysis().modelVersion()).isNull();
-        assertThat(res.analysis().reviewCount()).isNull();
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        assertThat(res.analysis()).isNull();
         assertThat(res.reviews().items()).hasSize(3).allSatisfy(r -> assertThat(r.rti()).isNull());
     }
 
@@ -132,7 +164,8 @@ class DataProductServiceAnalysisTest {
         assertThat(res.product()).isNull();
         assertThat(res.reviews().items()).isEmpty();
         assertThat(res.job().id()).isEqualTo(9L);
-        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.NOT_ANALYZED);
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.NOT_ANALYZED);
+        assertThat(res.analysis()).isNull();
     }
 
     @Test
@@ -146,6 +179,7 @@ class DataProductServiceAnalysisTest {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode json = mapper.valueToTree(callWith("product-analysis-done.json"));
 
+        assertThat(json.get("analysisStatus").asText()).isEqualTo("DONE");
         JsonNode analysis = json.get("analysis");
         assertThat(analysis.get("status").asText()).isEqualTo("DONE");
         assertThat(analysis.get("modelVersion").asText()).isEqualTo("rti-model-0.5");
@@ -171,8 +205,18 @@ class DataProductServiceAnalysisTest {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode json = mapper.valueToTree(callWith("product-analysis-missing.json"));
 
-        // null 이 아니라 상태 객체가 온다
-        assertThat(json.get("analysis").get("status").asText()).isEqualTo("UNAVAILABLE");
-        assertThat(json.get("analysis").get("modelVersion").isNull()).isTrue();
+        // 결과가 없으면 analysis 는 null(기존 뜻 유지), 상태는 analysisStatus 로 온다
+        assertThat(json.get("analysis").isNull()).isTrue();
+        assertThat(json.get("analysisStatus").asText()).isEqualTo("UNAVAILABLE");
+    }
+
+    @Test
+    void JSON_응답_모양_분석_전() {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode json = mapper.valueToTree(callWith("product-analysis-not-analyzed.json"));
+
+        assertThat(json.get("analysis").isNull()).isTrue();
+        assertThat(json.get("analysisStatus").asText()).isEqualTo("NOT_ANALYZED");
+        assertThat(json.has("hasAnalysisResult")).isFalse();
     }
 }
