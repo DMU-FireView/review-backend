@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,9 +35,14 @@ public class ChatRecommendationService {
     private final ProductRepository productRepository;
 
     /**
+     * 대화 저장 트랜잭션과 따로 도는 읽기 전용 트랜잭션에서 조회한다. 같은 트랜잭션에서
+     * 쿼리가 실패하면 호출자가 예외를 잡아도 바깥 트랜잭션이 rollback-only 가 되고
+     * (PostgreSQL 은 트랜잭션 자체가 aborted 상태가 된다) 답변 저장까지 같이 사라진다.
+     *
      * @param externalId 대화 상품 식별자 {@code "{platform}-{productId}"}
      * @return 대화 상품을 못 찾거나 카테고리가 없으면 빈 목록
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public List<ChatRecommendation> findSimilar(String externalId) {
         Optional<Product> current = DataServerProductKey.parse(externalId)
                 .flatMap(key -> productRepository.findByDataPlatformAndDataProductId(
@@ -45,6 +52,9 @@ public class ChatRecommendationService {
             return List.of();
         }
         return findCandidates(current.get()).stream()
+                // 쿼리가 공백 번호표를 걸러도 TRIM 은 탭·개행을 못 지운다. 카드에 externalId 가
+                // null 로 나가지 않도록 엔티티 기준으로 한 번 더 거른다
+                .filter(Product::hasDataServerAddress)
                 .map(ChatRecommendation::from)
                 .toList();
     }

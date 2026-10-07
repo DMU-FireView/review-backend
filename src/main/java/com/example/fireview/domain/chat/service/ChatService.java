@@ -118,7 +118,7 @@ public class ChatService {
 
         // ── 추천: 모델이 원한다고 판단한 턴에만, 상품은 DB 에서 고른다 (LLM 추가 호출 없음) ──
         List<ChatRecommendation> recommendations = parsed.wantsRecommendations()
-                ? recommendationService.findSimilar(session.getProductId())
+                ? findRecommendations(session.getProductId())
                 : List.of();
 
         saveTurn(session, question, parsed.answer(), false, null,
@@ -156,6 +156,23 @@ public class ChatService {
     }
 
     // ────────────────────────────── 내부 ──────────────────────────────
+
+    /**
+     * 추천은 부가 기능이라 조회가 실패해도 답변은 그대로 돌려준다.
+     *
+     * <p>조회는 {@link ChatRecommendationService} 가 별도 트랜잭션에서 하므로 여기서 예외를
+     * 잡아도 이 대화 저장 트랜잭션은 rollback-only 가 되지 않는다. 잡는 자리는 반드시 프록시
+     * 바깥(호출자)이어야 한다. 안쪽에서 삼키면 rollback-only 인 트랜잭션을 커밋하려다
+     * UnexpectedRollbackException 이 난다.
+     */
+    private List<ChatRecommendation> findRecommendations(String productId) {
+        try {
+            return recommendationService.findSimilar(productId);
+        } catch (RuntimeException e) {
+            log.warn("[Chat] 추천 조회 실패, 빈 목록으로 대체 - productId={}", productId, e);
+            return List.of();
+        }
+    }
 
     private ChatSession resolveSession(User user, Long sessionId, String productId, String question) {
         if (sessionId == null) {

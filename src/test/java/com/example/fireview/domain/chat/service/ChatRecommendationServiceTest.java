@@ -105,6 +105,50 @@ class ChatRecommendationServiceTest {
     }
 
     @Test
+    void 공백뿐인_번호표는_LIMIT_전에_빠지고_유효한_후보가_세_자리를_채운다() {
+        // 리뷰가 가장 많은 행들이 공백 번호표면 쿼리 단계에서 빠져야 뒤의 유효 후보가 자리를 채운다
+        current(20000L);
+        save(" ", " ", Category.BEAUTY_SKINCARE, 20000L, 900);
+        save("kurly", "  ", Category.BEAUTY_SKINCARE, 20000L, 800);
+        save("   ", "2999", Category.BEAUTY_SKINCARE, 20000L, 700);
+        save("kurly", "2001", Category.BEAUTY_SKINCARE, 20000L, 30);
+        save("kurly", "2002", Category.BEAUTY_SKINCARE, 20000L, 20);
+        save("kurly", "2003", Category.BEAUTY_SKINCARE, 20000L, 10);
+
+        assertThat(ids(service.findSimilar(CURRENT)))
+                .containsExactly("kurly-2001", "kurly-2002", "kurly-2003");
+    }
+
+    @Test
+    void 가격을_모를_때도_공백뿐인_번호표는_LIMIT_전에_빠진다() {
+        current(null);
+        save(" ", " ", Category.BEAUTY_SKINCARE, 20000L, 900);
+        save("kurly", " ", Category.BEAUTY_SKINCARE, 20000L, 800);
+        save(" ", "2999", Category.BEAUTY_SKINCARE, 20000L, 700);
+        save("kurly", "2001", Category.BEAUTY_SKINCARE, 100L, 30);
+        save("kurly", "2002", Category.BEAUTY_SKINCARE, null, 20);
+        save("kurly", "2003", Category.BEAUTY_SKINCARE, 999999L, 10);
+
+        assertThat(ids(service.findSimilar(CURRENT)))
+                .containsExactly("kurly-2001", "kurly-2002", "kurly-2003");
+    }
+
+    @Test
+    void 탭이나_개행뿐인_번호표도_externalId_가_null_인_카드로_나가지_않는다() {
+        // SQL TRIM 은 스페이스만 지우므로 이런 값은 쿼리를 통과할 수 있다. 결과에서는 반드시 빠져야 한다
+        current(20000L);
+        save("\t", "\t", Category.BEAUTY_SKINCARE, 20000L, 900);
+        save("kurly", "\n", Category.BEAUTY_SKINCARE, 20000L, 800);
+        save("kurly", "2001", Category.BEAUTY_SKINCARE, 20000L, 10);
+
+        List<ChatRecommendation> recommendations = service.findSimilar(CURRENT);
+
+        assertThat(recommendations).extracting(ChatRecommendation::externalId)
+                .doesNotContainNull()
+                .contains("kurly-2001");
+    }
+
+    @Test
     void 리뷰가_많은_순으로_최대_세_개를_고른다() {
         current(20000L);
         save("kurly", "r10", Category.BEAUTY_SKINCARE, 20000L, 10);

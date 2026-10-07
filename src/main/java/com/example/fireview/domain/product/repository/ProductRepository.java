@@ -38,15 +38,18 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     /**
      * 챗봇 추천 후보. 같은 카테고리의 Data 서버 상품 중 가격이 범위 안인 것을 리뷰 많은 순으로.
      *
-     * <p>번호표(data_platform, data_product_id)가 없는 행은 상세 화면을 열 수 없으므로 뺀다.
+     * <p>번호표(data_platform, data_product_id)가 없거나 공백뿐인 행은 상세 화면을 열 수 없으므로
+     * 뺀다({@link Product#hasDataServerAddress()} 와 같은 뜻). LIMIT 전에 빠져야 그 자리를 다른
+     * 유효 후보가 채우므로 쿼리에서 거른다. SQL TRIM 은 스페이스만 지우므로 탭·개행만 있는 값은
+     * 호출자가 한 번 더 거른다.
      * 가격이 없는 상품은 BETWEEN 에 걸리지 않아 자연히 빠진다.
      */
     @Query("""
             SELECT p FROM Product p
             WHERE p.category = :category
               AND p.id <> :excludeId
-              AND p.dataPlatform IS NOT NULL AND p.dataPlatform <> ''
-              AND p.dataProductId IS NOT NULL AND p.dataProductId <> ''
+              AND p.dataPlatform IS NOT NULL AND TRIM(p.dataPlatform) <> ''
+              AND p.dataProductId IS NOT NULL AND TRIM(p.dataProductId) <> ''
               AND p.price BETWEEN :minPrice AND :maxPrice
             ORDER BY p.reviewCount DESC NULLS LAST, p.id ASC
             """)
@@ -61,8 +64,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
             SELECT p FROM Product p
             WHERE p.category = :category
               AND p.id <> :excludeId
-              AND p.dataPlatform IS NOT NULL AND p.dataPlatform <> ''
-              AND p.dataProductId IS NOT NULL AND p.dataProductId <> ''
+              AND p.dataPlatform IS NOT NULL AND TRIM(p.dataPlatform) <> ''
+              AND p.dataProductId IS NOT NULL AND TRIM(p.dataProductId) <> ''
             ORDER BY p.reviewCount DESC NULLS LAST, p.id ASC
             """)
     List<Product> findRecommendationCandidates(@Param("category") Category category,

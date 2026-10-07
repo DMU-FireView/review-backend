@@ -14,6 +14,7 @@ import com.example.fireview.domain.user.service.UserService;
 import com.example.fireview.global.exception.CustomException;
 import com.example.fireview.global.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -406,6 +407,25 @@ class ChatServiceTest {
         assertThat(captor.getAllValues().get(1).getContent())
                 .isEqualTo("아래에 보여 드릴게요.")
                 .doesNotContain("kurly-2001", "RECOMMEND");
+    }
+
+    @Test
+    void 추천_조회가_실패해도_답변은_정상으로_돌려주고_저장한다() {
+        givenLlmReturns("ONTOPIC: yes\nRECOMMEND: yes\n---\n비슷한 상품이 있으면 아래에 보여 드릴게요.", 1800, 60);
+        when(recommendationService.findSimilar(anyString()))
+                .thenThrow(new DataAccessResourceFailureException("db down"));
+
+        ChatService.ChatResult result =
+                service.ask(EMAIL, ChatTier.STANDARD, null, PRODUCT_ID, "비슷한 거 없어?");
+
+        assertThat(result.blocked()).isFalse();
+        assertThat(result.answer()).isEqualTo("비슷한 상품이 있으면 아래에 보여 드릴게요.");
+        assertThat(result.recommendations()).isNotNull().isEmpty();
+        // 추천 실패와 무관하게 쿼터는 정상 턴처럼 한 번만 쓰이고 환불되지 않는다
+        assertThat(quotaStore.used(user.getId())).isEqualTo(1);
+        assertThat(result.quota().usedToday()).isEqualTo(1);
+        verify(messageRepository, times(2)).save(any(ChatMessage.class)); // 질문 + 답변
+        verify(llmClient, times(1)).complete(anyString(), any(), anyString(), any());
     }
 
     private void givenLlmReturns(String raw, int inputTokens, int outputTokens) {
