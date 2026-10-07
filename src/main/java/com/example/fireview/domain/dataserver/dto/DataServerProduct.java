@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * Data 서버 상품 응답 (GET /api/v1/{platform}/products/{product_id} 의 product).
  *
- * <p>분석 결과(RTI·등급·사유)는 들어 있지 않다. Data 서버는 원본 수집만 소유한다.
+ * <p>상품 정보만 담는다. 신뢰도 분석 결과는 같은 응답의 최상위 {@code analysis} 로 따로 온다
+ * ({@link DataServerAnalysis}).
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DataServerProduct(

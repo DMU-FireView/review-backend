@@ -1,5 +1,6 @@
 package com.example.fireview.domain.chat.port;
 
+import com.example.fireview.domain.dataserver.DataServerFixtures;
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.client.DataServerClient;
 import com.example.fireview.domain.dataserver.dto.DataServerJob;
@@ -43,7 +44,7 @@ class DataServerProductAnalysisAdapterTest {
     private static DataServerProductResponse ok(String status, DataServerProduct p,
                                                 List<DataServerReview> reviews) {
         return new DataServerProductResponse(status, p,
-                new DataServerProductResponse.Reviews(reviews, null), null);
+                new DataServerProductResponse.Reviews(reviews, null), null, null);
     }
 
     @Test
@@ -64,8 +65,8 @@ class DataServerProductAnalysisAdapterTest {
     }
 
     @Test
-    void 분석_결과는_채우지_않는다() {
-        // Data 서버는 분석을 안 준다. 0 이나 임의값을 넣으면 모델이 사실처럼 말한다
+    void analysis가_없으면_분석_결과를_채우지_않는다() {
+        // 구버전 Data 서버는 analysis 를 안 준다. 0 이나 임의값을 넣으면 모델이 사실처럼 말한다
         when(dataServerClient.findProduct(any()))
                 .thenReturn(Optional.of(ok("fresh", product(128), List.of(review("맛있어요", 5.0)))));
 
@@ -98,7 +99,7 @@ class DataServerProductAnalysisAdapterTest {
         // 아직 수집 전. 빈 컨텍스트로 가야 챗봇이 "아직 모른다"고 답한다
         DataServerProductResponse queued = new DataServerProductResponse(
                 "queued", null, null, new DataServerJob(7L, "kurly", "1000146248",
-                "pending", "pending", "pending", null));
+                "pending", "pending", "pending", null), null);
         when(dataServerClient.findProduct(any())).thenReturn(Optional.of(queued));
 
         assertThat(adapter.findContext(EXTERNAL_ID)).isEmpty();
@@ -149,5 +150,66 @@ class DataServerProductAnalysisAdapterTest {
                 .hasSize(5)
                 .extracting(ProductAnalysisContext.SampleReview::content)
                 .containsExactly("1", "2", "3", "4", "5");
+    }
+
+    @Test
+    void 대표_리뷰에_리뷰별_RTI와_등급을_붙인다() {
+        when(dataServerClient.findProduct(any()))
+                .thenReturn(Optional.of(DataServerFixtures.load("product-analysis-done.json")));
+
+        ProductAnalysisContext ctx = adapter.findContext(EXTERNAL_ID).orElseThrow();
+
+        assertThat(ctx.sampleReviews()).hasSize(3);
+        ProductAnalysisContext.SampleReview r1 = ctx.sampleReviews().get(0);
+        assertThat(r1.rti()).isEqualTo(82.5);
+        assertThat(r1.grade()).isEqualTo("안전");   // 프롬프트 어휘(안전/주의/위험)
+        // 결과가 없는 리뷰(r-2)와 계산 불가(r-3)는 비워 둔다
+        assertThat(ctx.sampleReviews().get(1).rti()).isNull();
+        assertThat(ctx.sampleReviews().get(1).grade()).isNull();
+        assertThat(ctx.sampleReviews().get(2).rti()).isNull();
+        assertThat(ctx.sampleReviews().get(2).grade()).isNull();
+        // 세이프가드 4계층은 실제로 받은 리뷰 RTI 만 근거로 인정한다
+        assertThat(ctx.knownRtiValues()).containsExactly(82.5);
+    }
+
+    @Test
+    void 리뷰_점수로_상품_등급을_만들지_않는다() {
+        // 결과는 한 페이지 것뿐이다. 평균을 내면 상품 전체 값처럼 오해된다
+        when(dataServerClient.findProduct(any()))
+                .thenReturn(Optional.of(DataServerFixtures.load("product-analysis-done.json")));
+
+        ProductAnalysisContext ctx = adapter.findContext(EXTERNAL_ID).orElseThrow();
+
+        assertThat(ctx.averageRti()).isNull();
+        assertThat(ctx.trustGrade()).isNull();
+        assertThat(ctx.pros()).isEmpty();
+        assertThat(ctx.cons()).isEmpty();
+        assertThat(ctx.trustSignals()).isEmpty();
+    }
+
+    @Test
+    void level_어휘를_한국어로_옮긴다() throws Exception {
+        DataServerProductResponse body = DataServerFixtures.MAPPER.readValue("""
+                {"status": "fresh",
+                 "product": {"platform": "kurly", "product_id": "1", "name": "상품", "review_count": 50},
+                 "reviews": {"items": [
+                   {"review_id": "a", "content": "좋아요"},
+                   {"review_id": "b", "content": "보통"},
+                   {"review_id": "c", "content": "별로"},
+                   {"review_id": "d", "content": "이상한 값"}
+                 ]},
+                 "analysis": {"status": "done", "review_count": 4, "results": [
+                   {"review_id": "a", "rti": 75.0, "level": "safe", "reasons": []},
+                   {"review_id": "b", "rti": 55.0, "level": "warn", "reasons": []},
+                   {"review_id": "c", "rti": 20.0, "level": "danger", "reasons": []},
+                   {"review_id": "d", "rti": 60.0, "level": "unknown", "reasons": []}
+                 ]}}
+                """, DataServerProductResponse.class);
+        when(dataServerClient.findProduct(any())).thenReturn(Optional.of(body));
+
+        ProductAnalysisContext ctx = adapter.findContext("kurly-1").orElseThrow();
+
+        assertThat(ctx.sampleReviews()).extracting(ProductAnalysisContext.SampleReview::grade)
+                .containsExactly("안전", "주의", "위험", null);
     }
 }

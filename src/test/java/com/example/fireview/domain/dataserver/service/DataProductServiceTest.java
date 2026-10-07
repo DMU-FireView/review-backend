@@ -5,6 +5,7 @@ import com.example.fireview.domain.dataserver.dto.DataServerProduct;
 import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import com.example.fireview.domain.dataserver.dto.DataServerReview;
 import com.example.fireview.domain.dataserver.client.DataServerClient;
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.dataserver.dto.response.CollectionStatus;
 import com.example.fireview.domain.dataserver.dto.response.DataProductResponse;
 import com.example.fireview.domain.product.entity.Product;
@@ -46,7 +47,7 @@ class DataProductServiceTest {
     private static DataServerProductResponse body(String status, DataServerProduct p,
                                                   List<DataServerReview> reviews, DataServerJob job) {
         return new DataServerProductResponse(status, p,
-                reviews == null ? null : new DataServerProductResponse.Reviews(reviews, "next-1"), job);
+                reviews == null ? null : new DataServerProductResponse.Reviews(reviews, "next-1"), job, null);
     }
 
     private DataProductResponse call() {
@@ -67,7 +68,11 @@ class DataProductServiceTest {
         assertThat(res.product().externalId()).isEqualTo("kurly-1000146248");
         assertThat(res.reviews().items()).hasSize(1);
         assertThat(res.reviews().nextCursor()).isEqualTo("next-1");
-        assertThat(res.analysis()).isNull();
+        // 구버전 Data 서버처럼 analysis 가 없으면 null 대신 UNAVAILABLE
+        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        assertThat(res.reviews().items().get(0).rti()).isNull();
+        assertThat(res.reviews().items().get(0).level()).isNull();
+        assertThat(res.reviews().items().get(0).reasons()).isEmpty();
     }
 
     @Test
@@ -108,6 +113,7 @@ class DataProductServiceTest {
         assertThat(res.collectionStatus()).isEqualTo(CollectionStatus.UNAVAILABLE);
         assertThat(res.product()).isNull();
         assertThat(res.reviews().items()).isEmpty();
+        assertThat(res.analysis().status()).isEqualTo(AnalysisStatus.UNAVAILABLE);
     }
 
     @Test

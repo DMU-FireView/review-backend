@@ -1,0 +1,6 @@
+{
+  "status": "queued",
+  "job": {"id": 9, "platform": "kurly", "product_id": "1000146248", "status": "pending",
+          "product_status": "pending", "review_status": "pending", "last_error": null},
+  "analysis": {"status": "not_analyzed", "job": null, "review_count": 0, "results": []}
+}

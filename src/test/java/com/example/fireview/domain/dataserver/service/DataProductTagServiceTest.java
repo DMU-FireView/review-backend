@@ -39,7 +39,7 @@ class DataProductTagServiceTest {
         DataServerProduct p = new DataServerProduct("kurly", "1000146248", "토리든 마스크팩",
                 "https://kurly.com/p", null, null, null, 17000, null, "뷰티", 1318, null, null);
         return new DataServerProductResponse("fresh", p,
-                new DataServerProductResponse.Reviews(List.of(), null), null);
+                new DataServerProductResponse.Reviews(List.of(), null), null, null);
     }
 
     @Test
@@ -71,7 +71,7 @@ class DataProductTagServiceTest {
         when(dataServerClient.findProduct(KEY)).thenReturn(Optional.of(
                 new DataServerProductResponse("queued", null, null,
                         new DataServerJob(9L, "kurly", "1000146248",
-                                "pending", "pending", "pending", null))));
+                                "pending", "pending", "pending", null), null)));
 
         assertThatThrownBy(() -> service.resolveOrCreate(KEY))
                 .isInstanceOf(CustomException.class)

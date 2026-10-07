@@ -1,5 +1,10 @@
 # 완료 웹훅 규격 (Data 서버 → Spring)
 
+> **보류: 발송 주체 미구현, 현재 설계는 폴링.**
+> Data 서버(review-data)에 이 웹훅을 보내는 코드가 없다. 지금은 Spring 이 상품 조회 때
+> Data 서버 응답의 `analysis` 를 받아 상태와 리뷰별 결과를 넘기고, 프론트는 다시 조회해 갱신한다.
+> Spring 수신 쪽(`domain/webhook`)은 남아 있지만 호출되지 않는다. 다시 쓰게 되면 이 표시를 지운다.
+
 > 대상: Data 서버 담당자
 > Spring 구현: `domain/webhook`, `global/security/ServiceTokenFilter`
 
