@@ -39,4 +39,21 @@ class PromptAssemblerTest {
 
         assertThat(prompt).contains("ONTOPIC: yes", "ONTOPIC: no", "\n---\n");
     }
+
+    @Test
+    void 추천_여부_줄을_안내한다() {
+        String prompt = assembler.systemPrompt();
+
+        assertThat(prompt).contains("RECOMMEND: yes", "RECOMMEND: no");
+        // ONTOPIC 바로 다음 줄에 둔다. LlmAnswer 는 그 자리만 읽는다
+        assertThat(prompt).contains("ONTOPIC: yes\nRECOMMEND: no\n---\n");
+    }
+
+    @Test
+    void 상품_이름이나_링크를_지어내지_말라고_한다() {
+        // 추천 상품은 서버가 DB 에서 고른다. 모델이 만든 상품명·링크가 본문에 나오면 안 된다
+        assertThat(assembler.systemPrompt())
+                .contains("[비슷한 상품 추천]")
+                .contains("상품 이름, 가격, 링크, 상품 번호를 지어내거나 본문에 적지 마라");
+    }
 }

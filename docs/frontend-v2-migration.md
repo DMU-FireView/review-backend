@@ -238,6 +238,7 @@ Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으�
 - [ ] 신고 내역에서 본문 null 처리
 - [ ] **목록·검색 결과에 `externalId` 가 있으면 v2 상세로 열기**
 - [ ] **`avgRti ?? 0.0` 제거 — null 을 "분석 전"으로** (지금은 분석 안 한 상품이 0점으로 보임)
+- [ ] 챗봇 `recommendations` 카드 (빈 배열이면 숨김, 탭 → `/product/:platform/:productId`, null 평점·리뷰 수 숨김) — 9절
 
 ---
 
@@ -283,6 +284,51 @@ v2 경로로만 내려갑니다. 그래서 v2 로 여는 게 맞습니다.
 컬리·올리브영·무신사·11번가 4곳입니다. 나머지는 Data 서버 쪽 사정으로 아직 안 됩니다
 (오늘의집·네이버는 서버에서 브라우저가 안 뜸, 에이블리는 키 설정, G마켓은 차단,
 옥션은 30초 이상). 고쳐지면 백엔드 설정만 바꿔 늘립니다.
+
+---
+
+## 9. 챗봇 추천 카드 (2026-10-07)
+
+챗봇 응답(`POST /api/chat/messages`, `/api/chat/pro/messages`)에 `recommendations` 배열이
+추가됐습니다. 기존 필드는 그대로라 지금 코드는 깨지지 않습니다.
+
+```jsonc
+{
+  "sessionId": 10,
+  "answer": "같은 분류의 비슷한 상품을 아래에 보여 드릴게요. ...",
+  "blocked": false,
+  "blockReason": null,
+  "usedTokens": 1850,
+  "quota": { ... },
+  "recommendations": [
+    { "externalId": "kurly-1001872496", "platform": "kurly", "productId": "1001872496",
+      "name": "...", "price": 29900, "thumbnailUrl": "https://...",
+      "reviewCount": 56, "rating": null }
+  ]
+}
+```
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `externalId` | string | `"{platform}-{productId}"`. 이 상품으로 새 대화를 열 때 챗봇 `productId` 에 그대로 |
+| `platform` | string | 쇼핑몰 (예: `kurly`). 상세 경로에 쓴다 |
+| `productId` | string | 쇼핑몰 상품 ID. 상세 경로에 쓴다 |
+| `name` | string | 상품명 |
+| `price` | number \| null | 가격(원). null 이면 가격 표시 생략 |
+| `thumbnailUrl` | string \| null | 대표 이미지. null 이면 기본 이미지 |
+| `reviewCount` | number \| null | 리뷰 수. **null 이면 표시하지 않는다** |
+| `rating` | number \| null | 평균 평점. **null 이면 표시하지 않는다** (0.0 점으로 그리지 말 것) |
+
+해야 할 것
+
+- **빈 배열이 기본입니다.** 대부분의 답변은 `[]` 입니다. 비어 있으면 카드 영역을 아예 그리지 않습니다.
+  `null` 로는 오지 않지만, 옛 응답 캐시 등을 대비해 `?? []` 로 읽어 두면 안전합니다
+- 차단(`blocked: true`)된 답변에는 항상 빈 배열입니다
+- 카드를 누르면 **`/product/:platform/:productId`** (v2 상세) 로 엽니다
+- `reviewCount`·`rating` 이 null 이면 그 항목을 숨깁니다. `?? 0` 으로 바꾸면 리뷰 0개·0점으로 보입니다
+- 카드는 답변 말풍선 **아래**에 따로 그립니다. `answer` 본문에는 상품 이름·링크가 없고, HTML 도 없습니다
+  (본문을 HTML 로 렌더링하지 마세요)
+- 추천은 대화 기록에 저장되지 않습니다. 이전 대화를 다시 열면 카드는 나오지 않습니다
 
 ---
 

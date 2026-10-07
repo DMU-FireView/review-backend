@@ -554,11 +554,33 @@ Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으�
     "remaining": 4,
     "proAvailable": false,
     "resetAt": "2026-10-01T15:00:00Z"
-  }
+  },
+  "recommendations": []
 }
 ```
 
 `quota` 는 **이번 턴을 반영한** 값이다. 전송 직후 남은 횟수 표시를 갱신하는 데 그대로 쓸 수 있다.
+
+**`recommendations` — 비슷한 상품 카드** (#199)
+
+사용자가 "다른 상품 추천해줘", "비슷한 거 없어?"처럼 다른·비슷한·대체 상품을 원하면
+대화 상품과 비슷한 실제 상품이 담긴다. **항상 배열이고 null 로 오지 않는다.**
+
+```json
+"recommendations": [
+  { "externalId": "kurly-1001872496", "platform": "kurly", "productId": "1001872496",
+    "name": "...", "price": 29900, "thumbnailUrl": "https://...", "reviewCount": 56, "rating": null }
+]
+```
+
+- 모델은 추천이 필요한지만 판단하고(응답 형식의 `RECOMMEND: yes|no` 줄), **상품은 서버가 DB 에서 고른다.**
+  `answer` 본문에는 상품 이름·링크·ID 가 들어가지 않는다. 추천 때문에 LLM 을 더 부르지 않으며 쿼터도 그대로다
+- 선정 기준: 대화 상품과 **같은 카테고리**, 가격 **0.5~1.5배**(대화 상품 가격을 모르면 가격 조건 생략),
+  Data 서버 번호표가 있는 상품(빈 문자열·공백뿐인 번호표 제외), 대화 상품 제외, **리뷰 수 많은 순 최대 3개**. RTI 가 아직 없어 신뢰도로는 정렬하지 않는다
+- 빈 배열인 경우: `blocked=true`, 추천을 원하지 않은 질문, 대화에 상품이 없음, 대화 상품을 Spring 에서 못 찾음, 대화 상품의 카테고리가 없음, 조건에 맞는 후보가 없음,
+  추천 조회 실패(DB 장애 등). 추천이 실패해도 답변·저장·쿼터는 정상 턴과 같고 200 으로 응답한다
+- `price`·`reviewCount`·`rating`·`thumbnailUrl` 은 모르면 **null** 이다. 0 으로 채우지 않는다
+- 이전 대화 불러오기(`/sessions/{id}/messages`)에는 추천이 저장되지 않는다
 
 **POST `/api/chat/pro/messages`** — 요청·응답 형식이 `/api/chat/messages` 와 완전히 같다.
 `PRO` 요금제만 호출할 수 있고, 그 외에는 `403 CHAT_PLAN_REQUIRED` 다. 상위 모델로 더 긴 답변을 받는다.

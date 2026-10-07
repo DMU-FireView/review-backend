@@ -117,4 +117,117 @@ class LlmAnswerTest {
         assertThat(LlmAnswer.parse(null).onTopic()).isFalse();
         assertThat(LlmAnswer.parse("").onTopic()).isFalse();
     }
+
+    // ── RECOMMEND 줄 ────────────────────────────────────────────────────────────
+
+    @Test
+    void RECOMMEND_줄이_없으면_추천하지_않는다() {
+        LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: yes\n---\n가격 대비 평이 좋습니다.");
+
+        assertThat(parsed.recommend()).isFalse();
+        assertThat(parsed.wantsRecommendations()).isFalse();
+        assertThat(parsed.answer()).isEqualTo("가격 대비 평이 좋습니다.");
+    }
+
+    @Test
+    void RECOMMEND_yes_를_읽고_본문에서는_뺀다() {
+        LlmAnswer parsed = LlmAnswer.parse("""
+                ONTOPIC: yes
+                RECOMMEND: yes
+                ---
+                같은 분류의 비슷한 상품이 있으면 아래에 보여 드릴게요.""");
+
+        assertThat(parsed.onTopic()).isTrue();
+        assertThat(parsed.recommend()).isTrue();
+        assertThat(parsed.wantsRecommendations()).isTrue();
+        assertThat(parsed.answer()).isEqualTo("같은 분류의 비슷한 상품이 있으면 아래에 보여 드릴게요.");
+    }
+
+    @Test
+    void RECOMMEND_no_를_읽는다() {
+        LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: yes\nRECOMMEND: no\n---\n사이즈가 작다는 의견이 많습니다.");
+
+        assertThat(parsed.onTopic()).isTrue();
+        assertThat(parsed.recommend()).isFalse();
+        assertThat(parsed.answer()).isEqualTo("사이즈가 작다는 의견이 많습니다.");
+    }
+
+    @Test
+    void RECOMMEND_값이_이상하면_추천하지_않는다() {
+        for (String value : new String[]{"maybe", "", "yes please", "1"}) {
+            LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: yes\nRECOMMEND: " + value + "\n---\n답변입니다.");
+
+            assertThat(parsed.recommend()).as(value).isFalse();
+            assertThat(parsed.onTopic()).as(value).isTrue();
+            assertThat(parsed.answer()).as(value).isEqualTo("답변입니다.");
+        }
+    }
+
+    @Test
+    void RECOMMEND_대소문자와_true_표기도_허용한다() {
+        assertThat(LlmAnswer.parse("ONTOPIC: yes\nrecommend: TRUE\n---\n답변").recommend()).isTrue();
+        assertThat(LlmAnswer.parse("ONTOPIC: yes\nRECOMMEND：yes\n---\n답변").recommend()).isTrue();
+    }
+
+    @Test
+    void 구분자를_빠뜨려도_RECOMMEND_줄은_본문에_남지_않는다() {
+        LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: yes\nRECOMMEND: yes\n아래에 비슷한 상품을 보여 드릴게요.");
+
+        assertThat(parsed.recommend()).isTrue();
+        assertThat(parsed.answer()).isEqualTo("아래에 비슷한 상품을 보여 드릴게요.");
+    }
+
+    @Test
+    void 엉뚱한_자리의_RECOMMEND_줄은_본문에서_지우고_추천으로_보지_않는다() {
+        // 정해진 자리(ONTOPIC 다음 줄)에 둔 줄만 판단에 쓴다. 다른 자리의 줄은 노출만 막는다
+        LlmAnswer parsed = LlmAnswer.parse("""
+                ONTOPIC: yes
+                ---
+                장점은 가격입니다.
+                RECOMMEND: yes""");
+
+        assertThat(parsed.recommend()).isFalse();
+        assertThat(parsed.answer()).isEqualTo("장점은 가격입니다.")
+                .doesNotContain("RECOMMEND");
+    }
+
+    @Test
+    void 코드펜스_안의_RECOMMEND_도_읽는다() {
+        LlmAnswer parsed = LlmAnswer.parse("""
+                ```
+                ONTOPIC: yes
+                RECOMMEND: yes
+                ---
+                아래에 보여 드릴게요.
+                ```""");
+
+        assertThat(parsed.recommend()).isTrue();
+        assertThat(parsed.answer()).isEqualTo("아래에 보여 드릴게요.");
+    }
+
+    @Test
+    void 주제이탈이면_RECOMMEND_yes_여도_추천하지_않는다() {
+        LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: no\nRECOMMEND: yes\n---\n상품과 리뷰에 대해서만 도와드릴 수 있어요.");
+
+        assertThat(parsed.onTopic()).isFalse();
+        assertThat(parsed.wantsRecommendations()).isFalse();
+        assertThat(parsed.answer()).doesNotContain("RECOMMEND");
+    }
+
+    @Test
+    void RECOMMEND_줄만_있고_본문이_없으면_형식_위반이다() {
+        LlmAnswer parsed = LlmAnswer.parse("ONTOPIC: yes\nRECOMMEND: yes\n---\n");
+
+        assertThat(parsed.onTopic()).isFalse();
+        assertThat(parsed.recommend()).isFalse();
+        assertThat(parsed.answer()).contains("다시 질문");
+    }
+
+    @Test
+    void 형식_위반이면_추천하지_않는다() {
+        LlmAnswer parsed = LlmAnswer.parse("RECOMMEND: yes\n그냥 답변");
+
+        assertThat(parsed.onTopic()).isFalse();
+        assertThat(parsed.wantsRecommendations()).isFalse();
+    }
 }
