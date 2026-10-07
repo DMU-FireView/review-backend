@@ -20,10 +20,12 @@ public enum TrustGrade {
      * 등급 경계. AI 서버 등급 정책(rti-v0)·Data 서버와 같은 값을 쓴다.
      * 다르면 같은 RTI 가 상세에선 safe, 목록에선 SUSPICIOUS 처럼 서로 다르게 그려진다.
      *
-     * <p>이미 저장된 {@code reviews.trust_grade} 는 새 경계로 다시 매기지 않는다(#201).
-     * ReviewResponse·AdminService 는 저장값을 그대로 쓴다. 그 행은 더미 시드(DataInitializer,
+     * <p>이미 저장된 {@code reviews.trust_grade} 는 코드가 다시 매기지 않는다(#201).
+     * ReviewResponse·AdminService 는 저장값을 그대로 쓴다. 대부분은 더미 시드(DataInitializer,
      * #195 에서 삭제 예정)이거나 레거시 AiAnalysisService 가 AI level 을 85/55/30 으로 바꿔 저장한
-     * 것이라 80/50 과 70/40 에서 등급이 같다.
+     * 것이라 80/50 과 70/40 에서 등급이 같다. 레거시 updateReviewRtiScores 경로로 실제 rti 가
+     * 경계 구간(40~50, 70~80)에 저장된 행은 docs/sql/reclassify-review-trust-grade.sql 로
+     * 확인·재분류한다.
      */
     public static final double SAFE_MIN_SCORE = 70;
     public static final double SUSPICIOUS_MIN_SCORE = 40;
