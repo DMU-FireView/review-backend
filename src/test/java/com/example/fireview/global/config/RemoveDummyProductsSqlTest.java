@@ -29,8 +29,10 @@ import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -45,6 +47,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 실행한다. SET LOCAL 로 둔 구간 값은 current_setting(...) 자리에 그대로 넣는다.
  * 엔티티에 상품·리뷰를 가리키는 FK 가 새로 생기면, 그 테이블에 더미를 가리키는 행이 있을 때만
  * 여기서 FK 위반으로 실패한다. 새 테이블은 아래 픽스처에도 행을 넣어야 검출된다.
+ *
+ * <p>잠금 직후의 FK 사전 점검 DO 블록은 pg_constraint·to_regclass 를 쓰는 PostgreSQL 전용이라 H2 에서 실행하지
+ * 않는다. 대신 그 블록에 적힌 예상 FK 목록이 엔티티로 만든 H2 스키마의 FK 와 같은지 따로 비교한다.
  */
 @DataJpaTest
 @ActiveProfiles("test")
@@ -52,6 +57,9 @@ class RemoveDummyProductsSqlTest {
 
     private static final Path SQL = Path.of("docs/sql/remove-dummy-products.sql");
     private static final Pattern TEMP_TABLE = Pattern.compile("^CREATE TEMP TABLE (\\w+)", Pattern.MULTILINE);
+    private static final Pattern EXPECTED_FK =
+            Pattern.compile("^\\s+\\('(\\w+)', '(\\w+)', '(\\w+)'\\)", Pattern.MULTILINE);
+    private static final Pattern GUARDED_TABLE = Pattern.compile("to_regclass\\('(\\w+)'\\)");
 
     private static final long DUMMY_ID_MIN = 900_000_000_000L;
     private static final long NAVER_CACHED_ID = 12_345_678_901L;
@@ -154,6 +162,51 @@ class RemoveDummyProductsSqlTest {
                 .isPositive()
                 .isLessThan(sql.indexOf("DELETE FROM"));
         assertThat(sql).contains("IF ticketed > 0 THEN\n        RAISE EXCEPTION");
+    }
+
+    @Test
+    void FK_사전_점검의_예상_목록이_엔티티가_만드는_FK와_같다() throws IOException {
+        String sql = Files.readString(SQL, StandardCharsets.UTF_8);
+        String guard = sql.substring(sql.indexOf("WITH expected"), sql.indexOf("FK 목록이 예상과 다릅니다"));
+
+        List<String> expected = new ArrayList<>();
+        Matcher fk = EXPECTED_FK.matcher(guard);
+        while (fk.find()) {
+            expected.add(fk.group(1) + "." + fk.group(2) + " -> " + fk.group(3) + ".id");
+        }
+        assertThat(expected).hasSize(12);
+
+        // 점검 대상 테이블(actual 절의 to_regclass 목록) = 이 파일이 DELETE 하는 테이블
+        String actualClause = guard.substring(guard.indexOf("actual AS"));
+        Set<String> guarded = new HashSet<>();
+        Matcher t = GUARDED_TABLE.matcher(actualClause);
+        while (t.find()) {
+            guarded.add(t.group(1));
+        }
+        Set<String> deleted = new HashSet<>();
+        Matcher d = Pattern.compile("^\\s*DELETE FROM (\\w+)", Pattern.MULTILINE).matcher(sql);
+        while (d.find()) {
+            deleted.add(d.group(1));
+        }
+        assertThat(guarded).isEqualTo(deleted);
+
+        @SuppressWarnings("unchecked")
+        List<Object[]> rows = em.createNativeQuery("""
+                SELECT LOWER(fk.TABLE_NAME), LOWER(fk.COLUMN_NAME), LOWER(pk.TABLE_NAME), LOWER(pk.COLUMN_NAME),
+                       rc.DELETE_RULE
+                FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS rc
+                JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE fk
+                  ON fk.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA AND fk.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
+                JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE pk
+                  ON pk.CONSTRAINT_SCHEMA = rc.UNIQUE_CONSTRAINT_SCHEMA
+                 AND pk.CONSTRAINT_NAME = rc.UNIQUE_CONSTRAINT_NAME
+                 AND pk.ORDINAL_POSITION = fk.POSITION_IN_UNIQUE_CONSTRAINT
+                """).getResultList();
+        List<Object[]> intoDeleted = rows.stream().filter(r -> guarded.contains((String) r[2])).toList();
+        assertThat(intoDeleted).extracting(r -> r[0] + "." + r[1] + " -> " + r[2] + "." + r[3])
+                .containsExactlyInAnyOrderElementsOf(expected);
+        assertThat(intoDeleted).extracting(r -> (String) r[4]).allMatch(rule -> rule.equals("NO ACTION")
+                || rule.equals("RESTRICT"));
     }
 
     private void runStatements() throws IOException {

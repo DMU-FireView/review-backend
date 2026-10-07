@@ -11,11 +11,22 @@
 --   번호표가 없지만 구간 밖인 상품은 미리보기에 따로 보여 주고 지우지 않는다.
 --   구간 안인데 번호표가 있는 상품이 있으면 중단한다.
 --
--- ⚠️ 실행 중에는 상품·리뷰 쓰기가 잠시 막힌다.
+-- ⚠️ 실행 절차: 유지보수 시간에 쓰기를 멈추고 실행한다.
+--   1) 앱의 상품·리뷰·신고·피드백(리뷰 피드백, 분석 피드백과 신호)·찜·장바구니 쓰기와
+--      스키마 변경(배포에 따른 ddl-auto=update 포함)을 멈추고, 진행 중인 트랜잭션이 끝나기를 기다린다.
+--   2) 이 파일을 한 세션에서 처음부터 끝까지 바로 실행한다(트랜잭션을 열어 둔 채 두지 않는다).
+--   3) deadlock detected, lock_timeout, statement_timeout 으로 실패하면 전체가 롤백된 것이다.
+--      원인 트랜잭션이 끝난 뒤 파일 전체를 처음부터 다시 실행한다. 중간부터 이어서 실행하지 않는다.
+--   쓰기를 멈추는 이유: 아래 잠금은 대상 행이 바뀌거나 새 종속 행이 붙는 것을 막지만, 다른 트랜잭션이
+--   reviews 다음 products 처럼 이 파일과 다른 순서로 잠그면 데드락이 날 수 있다. 잠금 순서를 이 파일
+--   쪽에서만 맞춰서는 앱의 모든 트랜잭션과 순서가 맞는다고 보장할 수 없다. 실패해도 전체 롤백이라
+--   데이터는 상하지 않지만, 쓰기를 멈추는 것이 확실한 예방이다.
+--
+-- ⚠️ 실행 중에는 상품·리뷰 쓰기가 막힌다.
 --   대상을 고르기 전에 products, reviews 를 SHARE ROW EXCLUSIVE 로 잠근다. 읽기는 되지만
 --   상품·리뷰 추가·수정·삭제는 이 트랜잭션이 끝날 때까지 기다린다. 대상을 고른 뒤 다른 세션이
---   번호표를 채운 상품이 지워지는 일을 막기 위해서다. 잠금을 lock_timeout 안에 못 얻으면 실패하므로,
---   트래픽이 적은 시간에 실행하고 마지막 문장까지 바로 끝낸다(트랜잭션을 열어 둔 채 두지 않는다).
+--   번호표를 채운 상품이 지워지는 일을 막기 위해서다. DO 블록에서는 대상 상품·리뷰·분석 피드백 행을
+--   FOR UPDATE 로 잠가 새 종속 행이 붙지 못하게 한다. 잠금을 lock_timeout 안에 못 얻으면 실패한다.
 --
 -- ⚠️ 실제 사용자 데이터도 함께 지워진다.
 --   더미 상품에 대한 찜(wishlists), 장바구니(cart_items), 조회 이력(view_histories),
@@ -25,7 +36,9 @@
 --   신고·피드백 처리 결과 알림(notifications)은 FK 가 없어 남는다(target_url 이 사라진 신고를 가리킬 수 있다).
 --
 -- 사용자 계정(users 와 사용자 종속 테이블)과 번호표가 있는 실제 상품은 삭제하지 않는다.
--- 스키마에 추가된 FK가 있으면 검토하여 반영한다. FK 제약은 비활성화하지 않는다.
+-- FK 제약은 비활성화하지 않는다. 잠금 직후 FK 목록을 엔티티 기준 12개와 대조해, 다르면 삭제 전에 중단한다.
+--   운영은 ddl-auto=update 라 엔티티에 없는 FK 가 남아 있을 수 있다. ON DELETE CASCADE / SET NULL 인
+--   FK 는 지울 때 오류 없이 다른 행을 지우거나 바꾸므로, 건수 가드로는 잡히지 않는다.
 -- 기본은 ROLLBACK이다. 검토 후 실제 반영할 때만 마지막 문장을 COMMIT으로 바꾼다.
 BEGIN;
 
@@ -47,6 +60,64 @@ SET LOCAL fireview.expected_dummy_reviews = '1117';
 
 -- 대상을 고르기 전에 상품·리뷰 쓰기를 막는다. 읽기는 막지 않는다.
 LOCK TABLE products, reviews IN SHARE ROW EXCLUSIVE MODE;
+
+-- FK 사전 점검. 이 파일이 행을 지우는 테이블을 가리키는 FK 전체가 아래 12개와 정확히 같아야 한다
+-- (2026-10 Hibernate 가 엔티티로 PostgreSQL 16 에 만든 스키마 기준).
+-- 하나라도 더 있거나 없거나, 칼럼·대상이 다르거나, ON DELETE / ON UPDATE 가 NO ACTION·RESTRICT 가
+-- 아니거나, 지연 검사(DEFERRABLE)이거나, 검증되지 않은(NOT VALID) FK 면 중단한다.
+-- 제약 이름은 Hibernate 가 해시로 만들어 환경마다 다를 수 있으므로 테이블·칼럼 번호로 비교한다.
+-- 다른 스키마의 테이블이 거는 FK 도 잡힌다. 의도된 FK 라면 검토한 뒤 이 목록과 DELETE 문에 함께 반영한다.
+DO $$
+DECLARE
+    mismatch TEXT;
+BEGIN
+    WITH expected(child, child_col, parent) AS (VALUES
+        ('reviews', 'product_id', 'products'),
+        ('wishlists', 'product_id', 'products'),
+        ('cart_items', 'product_id', 'products'),
+        ('view_histories', 'product_id', 'products'),
+        ('product_platform_links', 'product_id', 'products'),
+        ('reports', 'product_id', 'products'),
+        ('review_feedbacks', 'product_id', 'products'),
+        ('analysis_feedbacks', 'review_id', 'reviews'),
+        ('reports', 'review_id', 'reviews'),
+        ('review_feedbacks', 'review_id', 'reviews'),
+        ('review_reasons', 'review_id', 'reviews'),
+        ('analysis_feedback_signals', 'feedback_id', 'analysis_feedbacks')
+    ), e AS (
+        SELECT to_regclass(child)::oid AS child_oid,
+               ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = to_regclass(child)
+                      AND attname = child_col AND NOT attisdropped)]::SMALLINT[] AS child_cols,
+               to_regclass(parent)::oid AS parent_oid,
+               ARRAY[(SELECT attnum FROM pg_attribute WHERE attrelid = to_regclass(parent)
+                      AND attname = 'id' AND NOT attisdropped)]::SMALLINT[] AS parent_cols,
+               child, child_col, parent
+        FROM expected
+    ), actual AS (
+        -- 삭제 대상 테이블 전체. 지금은 products, reviews, analysis_feedbacks 만 FK 로 참조되지만
+        -- 나머지 테이블에 새 FK 가 붙어도 간접 종속 행이 지워지거나 막히므로 함께 본다.
+        SELECT c.* FROM pg_constraint c
+        WHERE c.contype = 'f' AND c.confrelid IN (
+            to_regclass('products'), to_regclass('reviews'), to_regclass('analysis_feedbacks'),
+            to_regclass('analysis_feedback_signals'), to_regclass('review_feedbacks'), to_regclass('reports'),
+            to_regclass('review_reasons'), to_regclass('wishlists'), to_regclass('cart_items'),
+            to_regclass('view_histories'), to_regclass('product_platform_links'))
+    )
+    SELECT string_agg(COALESCE(a.conrelid::regclass::TEXT, e.child) || ':' || COALESCE(a.conname, e.child_col)
+               || ' -> ' || COALESCE(a.confrelid::regclass::TEXT, e.parent)
+               || ' delete=' || COALESCE(a.confdeltype::TEXT, 'missing'), E'\n')
+    INTO mismatch
+    FROM e FULL JOIN actual a
+      ON a.conrelid = e.child_oid AND a.conkey = e.child_cols
+     AND a.confrelid = e.parent_oid AND a.confkey = e.parent_cols
+    WHERE a.oid IS NULL OR e.child_oid IS NULL
+       OR a.confdeltype NOT IN ('a', 'r') OR a.confupdtype NOT IN ('a', 'r')
+       OR a.condeferrable OR NOT a.convalidated;
+    IF mismatch IS NOT NULL THEN
+        RAISE EXCEPTION 'FK 목록이 예상과 다릅니다. 검토 후 목록과 DELETE 문을 고치세요:%', E'\n' || mismatch;
+    END IF;
+END;
+$$;
 
 -- 번호표 없는 상품 전체(구간 안팎 모두). 공백 문자 집합은 Character.isWhitespace 와 같다:
 -- U+0009~000D, U+001C~0020, U+1680, U+2000~2006, U+2008~200A, U+2028, U+2029, U+205F, U+3000.
@@ -145,8 +216,11 @@ DECLARE
 BEGIN
     -- 테이블 잠금은 상품·리뷰 자체의 쓰기만 막는다. 대상 행도 잠가 실행 중에 새 찜·장바구니·신고·피드백이
     -- 붙지 못하게 한다(다른 테이블에 행을 넣을 때의 FK 검사가 이 잠금을 기다린다).
-    PERFORM 1 FROM products WHERE id IN (SELECT id FROM dummy_products) FOR UPDATE;
-    PERFORM 1 FROM reviews WHERE id IN (SELECT id FROM dummy_reviews) FOR UPDATE;
+    -- 분석 피드백 신호는 리뷰가 아니라 분석 피드백을 가리키므로, 대상 리뷰의 분석 피드백 행도 잠근다.
+    -- 리뷰를 먼저 잠갔으므로 이 뒤로는 대상 리뷰에 새 분석 피드백이 붙지 않는다.
+    PERFORM 1 FROM products WHERE id IN (SELECT id FROM dummy_products) ORDER BY id FOR UPDATE;
+    PERFORM 1 FROM reviews WHERE id IN (SELECT id FROM dummy_reviews) ORDER BY id FOR UPDATE;
+    PERFORM 1 FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews) ORDER BY id FOR UPDATE;
 
     SELECT COUNT(*) INTO ticketed FROM ticketed_in_range;
     IF ticketed > 0 THEN
