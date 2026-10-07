@@ -2,6 +2,7 @@ package com.example.fireview.domain.product.repository;
 
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,4 +34,38 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     /** 홈 목록 후보. Data 서버 상품만, 최근에 들어온 순. 이 중에서 분야를 섞어 고른다 */
     List<Product> findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();
+
+    /**
+     * 챗봇 추천 후보. 같은 카테고리의 Data 서버 상품 중 가격이 범위 안인 것을 리뷰 많은 순으로.
+     *
+     * <p>번호표(data_platform, data_product_id)가 없는 행은 상세 화면을 열 수 없으므로 뺀다.
+     * 가격이 없는 상품은 BETWEEN 에 걸리지 않아 자연히 빠진다.
+     */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.category = :category
+              AND p.id <> :excludeId
+              AND p.dataPlatform IS NOT NULL AND p.dataPlatform <> ''
+              AND p.dataProductId IS NOT NULL AND p.dataProductId <> ''
+              AND p.price BETWEEN :minPrice AND :maxPrice
+            ORDER BY p.reviewCount DESC NULLS LAST, p.id ASC
+            """)
+    List<Product> findRecommendationCandidatesInPriceRange(@Param("category") Category category,
+                                                           @Param("excludeId") Long excludeId,
+                                                           @Param("minPrice") long minPrice,
+                                                           @Param("maxPrice") long maxPrice,
+                                                           Limit limit);
+
+    /** 기준 상품 가격을 모를 때의 추천 후보. 가격 조건만 빠지고 나머지는 위와 같다 */
+    @Query("""
+            SELECT p FROM Product p
+            WHERE p.category = :category
+              AND p.id <> :excludeId
+              AND p.dataPlatform IS NOT NULL AND p.dataPlatform <> ''
+              AND p.dataProductId IS NOT NULL AND p.dataProductId <> ''
+            ORDER BY p.reviewCount DESC NULLS LAST, p.id ASC
+            """)
+    List<Product> findRecommendationCandidates(@Param("category") Category category,
+                                               @Param("excludeId") Long excludeId,
+                                               Limit limit);
 }

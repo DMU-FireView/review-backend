@@ -30,7 +30,7 @@ import java.util.List;
  *
  * 흐름: 요금제 검사 → 세이프가드 1계층 → 쿼터 차감 → 컨텍스트 조회
  *      → 프롬프트 조립 → LLM 호출 → 구조화 응답 파싱(3계층)
- *      → 세이프가드 4계층 → 저장
+ *      → 세이프가드 4계층 → 비슷한 상품 추천(DB 조회만) → 저장
  *
  * <p><b>쿼터를 차감하는 시점</b>이 중요하다. 세이프가드 1계층에서 막힌 질문은
  * LLM 을 부르지 않아 비용이 0 이므로 사용량으로 세지 않는다. 반대로 LLM 을
@@ -50,6 +50,7 @@ public class ChatService {
     private final UserService userService;
     private final ChatPlanPolicy planPolicy;
     private final ChatQuotaStore quotaStore;
+    private final ChatRecommendationService recommendationService;
 
     /**
      * @param tier      호출된 엔드포인트의 등급. 요금제가 이 등급을 쓸 수 없으면 403
@@ -115,12 +116,18 @@ public class ChatService {
                     response.inputTokens(), response.outputTokens());
         }
 
+        // ── 추천: 모델이 원한다고 판단한 턴에만, 상품은 DB 에서 고른다 (LLM 추가 호출 없음) ──
+        List<ChatRecommendation> recommendations = parsed.wantsRecommendations()
+                ? recommendationService.findSimilar(session.getProductId())
+                : List.of();
+
         saveTurn(session, question, parsed.answer(), false, null,
                 response.inputTokens(), response.outputTokens());
         session.touch();
 
         return new ChatResult(session.getId(), parsed.answer(), false, null,
-                response.inputTokens() + response.outputTokens(), quotaOf(user, plan));
+                response.inputTokens() + response.outputTokens(), quotaOf(user, plan),
+                recommendations);
     }
 
     /** 오늘 남은 사용량. 프론트가 전송 버튼을 막거나 남은 횟수를 보여줄 때 쓴다 */
@@ -192,7 +199,7 @@ public class ChatService {
         session.touch();
         int used = (inputTokens == null ? 0 : inputTokens) + (outputTokens == null ? 0 : outputTokens);
         return new ChatResult(session.getId(), userMessage, true, reason, used,
-                quotaOf(user, plan));
+                quotaOf(user, plan), List.of());
     }
 
     private QuotaStatus quotaOf(User user, PlanTier plan) {
@@ -242,9 +249,15 @@ public class ChatService {
      * @param blockReason 차단 사유 (blocked=true 일 때)
      * @param usedTokens  이번 턴에 소모한 토큰
      * @param quota       이 턴을 반영한 오늘 사용량
+     * @param recommendations 비슷한 상품. 차단됐거나 추천을 원하지 않은 턴은 빈 목록
      */
     public record ChatResult(Long sessionId, String answer, boolean blocked,
-                             String blockReason, int usedTokens, QuotaStatus quota) {}
+                             String blockReason, int usedTokens, QuotaStatus quota,
+                             List<ChatRecommendation> recommendations) {
+        public ChatResult {
+            recommendations = recommendations == null ? List.of() : List.copyOf(recommendations);
+        }
+    }
 
     /**
      * @param plan         적용 중인 요금제 (만료된 유료 요금제는 FREE 로 내려온 값)

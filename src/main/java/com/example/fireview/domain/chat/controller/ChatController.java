@@ -97,6 +97,13 @@ public class ChatController {
             그대로 넣으면 대화가 이어진다. `productId` 는 새 대화일 때만 반영된다.
 
             `usedTokens` 는 이번 턴의 LLM 토큰 소모량이다.
+
+            **`recommendations` 는 항상 배열이다(null 이 아니다).** 사용자가 다른·비슷한 상품을
+            원할 때만 대화 상품과 같은 카테고리·비슷한 가격대의 실제 상품이 최대 3개 담긴다.
+            차단(`blocked=true`)된 턴이나 추천을 원하지 않은 턴, 기준 상품을 못 찾은 턴은 빈 배열이다.
+            상품은 서버가 DB 에서 고르며 `answer` 본문에는 상품 이름·링크가 들어가지 않는다.
+            카드는 `/product/:platform/:productId` 로 연결하고, `reviewCount`·`rating`·`price` 가
+            null 이면 그 항목을 표시하지 않는다.
             """)
     @PostMapping("/messages")
     public DeferredResult<ApiResponse<ChatResponse>> ask(
