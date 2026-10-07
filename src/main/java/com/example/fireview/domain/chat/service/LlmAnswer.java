@@ -11,9 +11,13 @@ import java.util.regex.Pattern;
  * 시스템 프롬프트가 아래 형식을 요구한다.
  * <pre>
  * ONTOPIC: yes
+ * RECOMMEND: no
  * ---
  * 답변 본문
  * </pre>
+ *
+ * <p>{@code RECOMMEND} 줄은 선택이다. 없거나 값을 알아볼 수 없으면 추천하지 않는다.
+ * 모델은 추천이 필요한지만 판단하고, 어떤 상품을 보여줄지는 서버가 DB 에서 고른다.
  *
  * <p><b>JSON 이 아니라 구분자를 쓰는 이유</b><br>
  * JSON 으로 받으면 모델이 본문에 큰따옴표를 이스케이프 없이 넣는 순간 파싱이 깨진다.
@@ -25,7 +29,7 @@ import java.util.regex.Pattern;
  * 형식을 어긴 응답을 그대로 노출하면 세이프가드 3계층을 우회하는 통로가 되기 때문이다.
  */
 @Slf4j
-public record LlmAnswer(boolean onTopic, String answer) {
+public record LlmAnswer(boolean onTopic, String answer, boolean recommend) {
 
     /** 모델이 형식을 어겼을 때 사용자에게 보여줄 문구 */
     private static final String MALFORMED_FALLBACK =
@@ -34,6 +38,10 @@ public record LlmAnswer(boolean onTopic, String answer) {
     private static final Pattern HEADER =
             Pattern.compile("^\\s*ONTOPIC\\s*[:：]\\s*(yes|no|true|false)\\s*$",
                     Pattern.CASE_INSENSITIVE | Pattern.MULTILINE);
+
+    /** ONTOPIC 다음 줄에 올 수 있는 추천 요청 줄. 값은 무엇이든 받아 두고 yes/true 만 인정한다 */
+    private static final Pattern RECOMMEND_LINE =
+            Pattern.compile("^\\s*RECOMMEND\\s*[:：]\\s*(.*?)\\s*$", Pattern.CASE_INSENSITIVE);
 
     /** 헤더 다음에 오는 구분자 줄 */
     private static final Pattern SEPARATOR = Pattern.compile("^\\s*-{3,}\\s*$", Pattern.MULTILINE);
@@ -52,16 +60,88 @@ public record LlmAnswer(boolean onTopic, String answer) {
         String flag = header.group(1).toLowerCase();
         boolean onTopic = flag.equals("yes") || flag.equals("true");
 
-        String body = extractBody(text, header.end());
+        String rest = text.substring(header.end());
+        Boolean recommendFlag = readRecommendLine(rest);
+        boolean recommend = recommendFlag != null && recommendFlag;
+        if (recommendFlag != null) {
+            rest = rest.substring(nextLineStart(rest, firstContentLineStart(rest)));
+        }
+
+        String body = removeRecommendLines(extractBody(rest));
         if (body.isBlank()) {
             log.warn("[Chat] 본문이 비어 있는 응답");
             return malformed();
         }
-        return new LlmAnswer(onTopic, body);
+        return new LlmAnswer(onTopic, body, recommend);
+    }
+
+    /** 주제 안 답변이고 모델이 비슷한 상품 추천을 원한다고 판단했는지 */
+    public boolean wantsRecommendations() {
+        return onTopic && recommend;
     }
 
     private static LlmAnswer malformed() {
-        return new LlmAnswer(false, MALFORMED_FALLBACK);
+        return new LlmAnswer(false, MALFORMED_FALLBACK, false);
+    }
+
+    /**
+     * 헤더 바로 다음(빈 줄은 건너뛴다) 줄이 RECOMMEND 줄이면 그 값을 읽는다.
+     *
+     * @return RECOMMEND 줄이 없으면 null. 있으면 yes/true 일 때만 true, 그 밖의 값은 false
+     */
+    private static Boolean readRecommendLine(String rest) {
+        int start = firstContentLineStart(rest);
+        if (start < 0) {
+            return null;
+        }
+        Matcher m = RECOMMEND_LINE.matcher(lineAt(rest, start));
+        if (!m.matches()) {
+            return null;
+        }
+        String value = m.group(1).toLowerCase();
+        return value.equals("yes") || value.equals("true");
+    }
+
+    /**
+     * 본문에 남은 RECOMMEND 줄을 지운다.
+     * 모델이 구분자 아래나 본문 끝에 줄을 잘못 두면 사용자에게 그대로 보이기 때문이다.
+     * 이렇게 지운 줄은 추천 판단에 쓰지 않는다(정해진 자리에 둔 줄만 인정한다).
+     */
+    private static String removeRecommendLines(String body) {
+        StringBuilder kept = new StringBuilder();
+        for (String line : body.split("\n", -1)) {
+            if (RECOMMEND_LINE.matcher(line).matches()) {
+                continue;
+            }
+            if (!kept.isEmpty()) {
+                kept.append('\n');
+            }
+            kept.append(line);
+        }
+        return kept.toString().strip();
+    }
+
+    /** 헤더 줄 끝 다음부터 처음으로 내용이 있는 줄의 시작 위치. 없으면 -1 */
+    private static int firstContentLineStart(String rest) {
+        int pos = rest.startsWith("\n") ? 1 : (rest.startsWith("\r\n") ? 2 : 0);
+        while (pos < rest.length()) {
+            String line = lineAt(rest, pos);
+            if (!line.isBlank()) {
+                return pos;
+            }
+            pos = nextLineStart(rest, pos);
+        }
+        return -1;
+    }
+
+    private static String lineAt(String text, int start) {
+        int end = text.indexOf('\n', start);
+        return end < 0 ? text.substring(start) : text.substring(start, end);
+    }
+
+    private static int nextLineStart(String text, int start) {
+        int end = text.indexOf('\n', start);
+        return end < 0 ? text.length() : end + 1;
     }
 
     /**
@@ -69,8 +149,7 @@ public record LlmAnswer(boolean onTopic, String answer) {
      * 구분자가 있으면 그 다음부터, 없으면 헤더 다음 줄부터를 본문으로 본다.
      * 모델이 구분자를 빠뜨리는 경우가 형식 위반 중 가장 흔하고 피해도 없어서 허용한다.
      */
-    private static String extractBody(String text, int headerEnd) {
-        String rest = text.substring(headerEnd);
+    private static String extractBody(String rest) {
         Matcher sep = SEPARATOR.matcher(rest);
         String body = sep.find() ? rest.substring(sep.end()) : rest;
         return body.strip();
