@@ -23,6 +23,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -60,6 +63,21 @@ class ChatServiceTest {
     private ChatQuotaStore quotaStore;
     private User user;
 
+    /** 대화 트랜잭션이 열려 있는 동안만 true. 추천이 커밋 뒤에 도는지 볼 때 쓴다 */
+    private boolean inConversationTransaction;
+
+    private final TransactionOperations transactionOperations = new TransactionOperations() {
+        @Override
+        public <T> T execute(TransactionCallback<T> action) {
+            inConversationTransaction = true;
+            try {
+                return action.doInTransaction(new SimpleTransactionStatus());
+            } finally {
+                inConversationTransaction = false;
+            }
+        }
+    };
+
     private final ProductAnalysisContext context = new ProductAnalysisContext(
             PRODUCT_ID, "샘플 상품", 29900, "패션", 72.4, "주의", 128,
             List.of("가격 대비 좋음"), List.of("사이즈 작음"), List.of("작성일 편중"),
@@ -82,7 +100,7 @@ class ChatServiceTest {
 
         service = new ChatService(sessionRepository, messageRepository, productAnalysisPort,
                 assembler, guard, llmClient, userService, planPolicy, quotaStore,
-                recommendationService);
+                recommendationService, transactionOperations);
 
         user = User.builder().id(1L).email(EMAIL).nickname("tester").build();
         when(userService.findByEmail(EMAIL)).thenReturn(user);
@@ -337,6 +355,23 @@ class ChatServiceTest {
         verify(recommendationService).findSimilar(PRODUCT_ID);
         // 추천은 DB 조회만 한다. LLM 은 한 번만 부른다
         verify(llmClient, times(1)).complete(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void 추천은_대화_트랜잭션이_끝나고_저장이_끝난_뒤에_조회한다() {
+        givenLlmReturns("ONTOPIC: yes\nRECOMMEND: yes\n---\n비슷한 상품이 있으면 아래에 보여 드릴게요.", 1800, 60);
+        when(recommendationService.findSimilar(anyString())).thenAnswer(inv -> {
+            // 대화 트랜잭션 안에서 조회하면 바깥 커넥션을 쥔 채 두 번째 커넥션을 요구한다
+            assertThat(inConversationTransaction).isFalse();
+            verify(messageRepository, times(2)).save(any(ChatMessage.class));
+            return List.of(recommendation);
+        });
+
+        ChatService.ChatResult result =
+                service.ask(EMAIL, ChatTier.STANDARD, null, PRODUCT_ID, "비슷한 거 없어?");
+
+        assertThat(result.recommendations()).containsExactly(recommendation);
+        verify(recommendationService).findSimilar(PRODUCT_ID);
     }
 
     @Test
