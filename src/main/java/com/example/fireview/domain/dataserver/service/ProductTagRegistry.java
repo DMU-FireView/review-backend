@@ -132,8 +132,12 @@ public class ProductTagRegistry {
      * v2 상세에서 본 분석 상태를 번호표에 적는다. 목록이 이 값으로 "분석 완료/진행 중"을 보여준다.
      *
      * <p>번호표가 없으면 만들지 않는다 — {@link #upsertForDisplay} 와 같은 이유다.
-     * {@code UNAVAILABLE} 은 적지 않고, 이미 같은 상태면 쓰지 않는다({@link Product#observeAnalysisStatus}).
+     * {@code UNAVAILABLE} 은 적지 않고, 이미 같은 상태면 쓰지 않는다.
      * 실제로 바꿨을 때만 홈 목록 캐시를 비운다.
+     *
+     * <p>엔티티를 읽어 고치지 않고 두 칼럼만 지정해 UPDATE 한다
+     * ({@link ProductRepository#updateAnalysisStatus}). 엔티티 저장은 읽은 시점의 다른 칼럼까지
+     * 다시 써서, 동시에 들어온 검색의 표시 정보 저장과 서로 덮었다(#205).
      *
      * @return 상태를 바꿨으면 true
      */
@@ -143,10 +147,8 @@ public class ProductTagRegistry {
         if (status == null || status == AnalysisStatus.UNAVAILABLE) {
             return false;
         }
-        return productRepository
-                .findByDataPlatformAndDataProductId(key.platform(), key.productId())
-                .map(product -> product.observeAnalysisStatus(status, LocalDateTime.now()))
-                .orElse(false);
+        return productRepository.updateAnalysisStatus(
+                key.platform(), key.productId(), status.name(), LocalDateTime.now()) > 0;
     }
 
     /**

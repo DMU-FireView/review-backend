@@ -4,9 +4,11 @@ import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -31,6 +33,31 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
      * Spring 의 Long id 를 FK 로 물고 있다. 이 조회가 그 사이를 잇는 번호표 역할을 한다.
      */
     Optional<Product> findByDataPlatformAndDataProductId(String dataPlatform, String dataProductId);
+
+    /**
+     * 번호표의 분석 상태 두 칼럼만 바꾼다. 상태가 이미 같으면 쓰지 않는다.
+     *
+     * <p>엔티티를 읽어 고친 뒤 저장하면, 그 사이 표시 정보 저장이 같은 행을 쓴 경우 서로의 값을
+     * 덮는다(#205). 칼럼을 지정한 UPDATE 는 다른 칼럼을 건드리지 않고, 조건이 DB 에서 평가되므로
+     * 읽은 시점의 값에 기대지 않는다. 같은 상태 칼럼을 두 요청이 동시에 바꾸면 나중 커밋이 남는다.
+     *
+     * <p>이 쿼리는 영속성 컨텍스트를 거치지 않는다. 같은 트랜잭션에서 이미 읽은 엔티티는 옛 상태를
+     * 들고 있지만, {@link Product} 가 바뀐 칼럼만 UPDATE 하므로 그 엔티티를 저장해도 이 값을 덮지 않는다.
+     *
+     * @param status {@code AnalysisStatus#name()}
+     * @return 바꾼 행 수. 번호표가 없거나 같은 상태면 0
+     */
+    @Modifying
+    @Query("""
+            UPDATE Product p
+            SET p.analysisStatus = :status, p.analysisStatusAt = :observedAt
+            WHERE p.dataPlatform = :dataPlatform AND p.dataProductId = :dataProductId
+              AND (p.analysisStatus IS NULL OR p.analysisStatus <> :status)
+            """)
+    int updateAnalysisStatus(@Param("dataPlatform") String dataPlatform,
+                             @Param("dataProductId") String dataProductId,
+                             @Param("status") String status,
+                             @Param("observedAt") LocalDateTime observedAt);
 
     /** 홈 목록 후보. Data 서버 상품만, 최근에 들어온 순. 이 중에서 분야를 섞어 고른다 */
     List<Product> findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();

@@ -2,7 +2,6 @@ package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
-import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.product.repository.ProductRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,10 +16,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
-import java.util.Optional;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -46,20 +44,24 @@ class ProductAnalysisStatusCacheTest {
     @Autowired CacheManager cacheManager;
     @MockitoBean ProductRepository productRepository;
 
-    private Product tag;
     private Cache homeList;
 
     @BeforeEach
     void setUp() {
-        tag = Product.builder().id(1L).name("실상품").platform("KURLY")
-                .dataPlatform("kurly").dataProductId("1000146248").build();
-        given(productRepository.findByDataPlatformAndDataProductId(any(), any())).willReturn(Optional.of(tag));
         homeList = cacheManager.getCache("productList");
         homeList.put("all", "cached");
     }
 
+    /** 칼럼 지정 UPDATE 가 바꾼 행 수. 같은 상태거나 번호표가 없으면 0 이다 */
+    private void updatedRows(int rows) {
+        given(productRepository.updateAnalysisStatus(anyString(), anyString(), anyString(), any()))
+                .willReturn(rows);
+    }
+
     @Test
     void 상태가_바뀌면_홈_목록_캐시를_비운다() {
+        updatedRows(1);
+
         registry.recordAnalysisStatus(KEY, AnalysisStatus.DONE);
 
         assertThat(homeList.get("all")).isNull();
@@ -67,7 +69,7 @@ class ProductAnalysisStatusCacheTest {
 
     @Test
     void 같은_상태면_캐시를_그대로_둔다() {
-        tag.observeAnalysisStatus(AnalysisStatus.DONE, java.time.LocalDateTime.now());
+        updatedRows(0);
 
         registry.recordAnalysisStatus(KEY, AnalysisStatus.DONE);
 
