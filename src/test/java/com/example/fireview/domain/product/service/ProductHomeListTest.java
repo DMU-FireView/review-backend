@@ -1,5 +1,6 @@
 package com.example.fireview.domain.product.service;
 
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.product.dto.ProductResponse;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
@@ -106,5 +107,25 @@ class ProductHomeListTest {
         for (long i = 1; i <= 120; i++) tag(i, String.valueOf(1000 + i));
 
         assertThat(productService.getAllProducts()).hasSize(100);
+    }
+
+    @Test
+    void 홈_목록에_분석_상태와_모르는_평점이_실린다() {
+        // 컬리처럼 Data 서버가 평점을 주지 않는 상품. 번호표 생성 때 0.0 이 채워진다
+        Product done = productRepository.save(Product.builder().id(1L).name("실상품").platform("KURLY")
+                .dataPlatform("kurly").dataProductId("1000146248").build());
+        done.observeAnalysisStatus(AnalysisStatus.DONE, java.time.LocalDateTime.now());
+        productRepository.saveAndFlush(done);
+        tag(2L, "2000000001");
+
+        List<ProductResponse> home = productService.getAllProducts();
+
+        assertThat(home).hasSize(2);
+        ProductResponse analyzed = home.stream().filter(p -> p.id() == 1L).findFirst().orElseThrow();
+        ProductResponse unseen = home.stream().filter(p -> p.id() == 2L).findFirst().orElseThrow();
+        assertThat(analyzed.analysisStatus()).isEqualTo(AnalysisStatus.DONE);
+        assertThat(unseen.analysisStatus()).isNull();
+        assertThat(analyzed.avgRating()).isNull();
+        assertThat(analyzed.avgRti()).isNull();
     }
 }

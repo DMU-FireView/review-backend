@@ -152,7 +152,9 @@ Data 서버가 AI 서버로 리뷰별 RTI 를 계산해 저장하고, Spring 이
   "status": "DONE",
   "modelVersion": "rti-model-0.5",
   "policyVersion": "rti-v0",
-  "reviewCount": 128
+  "reviewCount": 128,
+  "sampled": true,
+  "sourceReviewCount": 1318
 },
 "reviews": {
   "items": [
@@ -199,7 +201,19 @@ Data 서버가 AI 서버로 리뷰별 RTI 를 계산해 저장하고, Spring 이
 - 리뷰의 `rti`·`level` 이 null 이면 **"판단 불가" 또는 "분석 전"** 입니다. 0점이나 위험으로 그리지 마세요.
   `analysisStatus` 가 `DONE` 인데 null 이면 그 리뷰는 판단할 신호가 부족한 것입니다.
 - `reasons` 는 결과가 없으면 빈 배열입니다. `TEXT_*` 같은 코드와 한국어 문장이 섞여 올 수 있습니다.
-- `analysis.reviewCount` 는 **분석 job 에 들어간 리뷰 수**입니다. `product.reviewCount`(쇼핑몰이 알려준 수)와 다를 수 있습니다.
+- **리뷰 수가 세 가지입니다.** 서로 다른 것을 셉니다.
+
+  | 필드 | 뜻 |
+  |---|---|
+  | `analysis.reviewCount` | **분석 입력(표본) 수.** 실제로 AI 에 넣은 리뷰 수 |
+  | `analysis.sourceReviewCount` | **Data 서버가 가진 원본 리뷰 수.** 표본을 이 중에서 고른다 |
+  | `product.reviewCount` | 쇼핑몰이 표시하는 전체 리뷰 수. 위 두 값과 다를 수 있다 |
+
+- `analysis.sampled` 가 `true` 면 원본 중 **일부만 골라** 분석했습니다(Data #80 표본 정책).
+  표본에 들지 않은 리뷰는 `DONE` 이어도 `rti`·`level` 이 null, `reasons` 가 빈 배열입니다.
+  즉 `DONE` 에서 리뷰 `rti` 가 null 인 이유는 둘입니다 — **표본에서 빠졌거나**, **계산 불가**이거나.
+  `sampled: false` 면 전수 분석이라 null 은 계산 불가뿐입니다.
+- `sampled`·`sourceReviewCount` 는 구버전 Data 서버(표본 정책 전)면 **null** 입니다. false·0 으로 읽지 마세요.
 - **상품 단위 평균 RTI·등급은 아직 없습니다.** 리뷰 결과는 지금 받은 리뷰 페이지 것만 옵니다.
   **화면에서 페이지 리뷰 점수로 평균을 내지 마세요.** 20건 표본 평균이 상품 점수처럼 보입니다.
   상품 요약은 Data 서버가 전체 결과로 계산해 주면 `analysis` 에 붙일 예정입니다.
@@ -217,11 +231,35 @@ category  categoryDisplayName  majorCategory  majorCategoryDisplayName
 하지 않은 상품에 신뢰도 50점이 붙어 "보통인 상품"처럼 보였습니다. 그래서 없앴습니다.
 값이 없으면 "분석 전" 으로 그려야 합니다.
 
+### 목록의 `analysisStatus` (2026-10-08)
+
+`GET /api/products`(홈·검색), `GET /api/dashboard` 의 상품마다 `analysisStatus` 가 붙습니다.
+값은 상세의 `analysisStatus` 와 같은 enum 입니다(`DONE`, `QUEUED`, `NOT_ANALYZED` ...).
+
+- **null 이면 "아직 모름"** 입니다. 누구도 이 상품의 v2 상세를 열지 않아 서버가 상태를 본 적이 없습니다.
+  "분석 전"과 같은 뜻이 아닙니다.
+- 서버는 **v2 상세를 열 때** Data 서버에서 받은 상태를 적어 둡니다. 그래서 실제 상태보다 늦을 수 있습니다.
+  정확한 상태가 필요하면 상세의 `analysisStatus` 를 쓰세요.
+- `UNAVAILABLE` 은 목록에 오지 않습니다. Data 서버에 잠깐 못 닿아도 마지막으로 본 값을 지우지 않습니다.
+- **`analysisStatus: DONE` 이어도 `avgRti` 는 null 입니다.** 상품 평균 RTI 는 아직 없습니다.
+  목록 배지는 "분석 완료"처럼 상태로 그리고, 점수를 지어내지 마세요.
+
+```json
+{ "id": 643763393047927, "name": "토리든 다이브인 마스크팩", "avgRti": null, "rtiGrade": null,
+  "reviewCount": 1318, "avgRating": null,
+  "dataPlatform": "kurly", "dataProductId": "1000146248", "externalId": "kurly-1000146248",
+  "analysisStatus": "DONE" }
+```
+
 ### `rating` 이 null 입니다
 
 컬리 기준으로 상품 평균 평점도, 리뷰 개별 평점도 전부 null 로 옵니다.
 **수집기가 평점을 아직 안 채웁니다.** 별점 UI 를 쓸 거면 Data 서버 담당자에게 확인이 필요합니다.
 다른 쇼핑몰은 다를 수 있습니다.
+
+목록(`/api/products`, 대시보드, 찜·장바구니)의 `avgRating` 도 Data 서버 상품이면서 평점을 모르면
+**null** 입니다(2026-10-08). 예전에는 `0.0` 으로 나가 "0점"처럼 보였습니다. null 이면 별점을 숨기세요.
+`externalId` 가 없는 기존 상품은 그대로입니다.
 
 ---
 
@@ -309,6 +347,9 @@ Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으�
 - [ ] 신고 내역에서 본문 null 처리
 - [ ] **목록·검색 결과에 `externalId` 가 있으면 v2 상세로 열기**
 - [ ] **`avgRti ?? 0.0` 제거 — null 을 "분석 전"으로** (지금은 분석 안 한 상품이 0점으로 보임)
+- [ ] 목록 배지를 `analysisStatus` 로 (null = 모름, `DONE` 이어도 `avgRti` 없음) — 3절
+- [ ] v2 `analysis.sampled`·`sourceReviewCount` 로 "표본 제외"와 "계산 불가" 구분 — 3절
+- [ ] 목록 `avgRating` null 이면 별점 숨김
 - [ ] 챗봇 `recommendations` 카드 (빈 배열이면 숨김, 탭 → `/product/:platform/:productId`, null 평점·리뷰 수 숨김) — 9절
 
 ---
@@ -328,7 +369,8 @@ Data 서버 상품을 내려줍니다. 프론트가 호출을 바꿀 필요는 �
 |---|---|
 | 상세 열기 | `/product/:platform/:productId` (v2) 로. `dataPlatform`·`dataProductId` 를 쓴다 |
 | 챗봇 | `productId` 에 `externalId` 를 그대로 |
-| 신뢰도 | `avgRti` 가 **null** 이다. "분석 전" 으로 표시 |
+| 신뢰도 | `avgRti` 가 **null** 이다. 상품 점수는 없다. 상태는 `analysisStatus`(null = 모름) — 3절 |
+| 평점 | `avgRating` 이 null 이면 모름. 0점으로 그리지 않는다 |
 | 카테고리 | `category`·`categoryDisplayName` 은 서버가 분류한 값(예: `"스킨케어"`, 프론트 카테고리 라벨과 같음). 분류 못 하면 null. `subCategory` 에 쇼핑몰 원문 |
 
 ### ⚠️ 지금 프론트에서 null 이 0 점으로 바뀝니다

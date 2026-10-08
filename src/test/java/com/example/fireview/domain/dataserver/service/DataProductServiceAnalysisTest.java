@@ -1,6 +1,7 @@
 package com.example.fireview.domain.dataserver.service;
 
 import com.example.fireview.domain.dataserver.DataServerFixtures;
+import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.client.DataServerClient;
 import com.example.fireview.domain.dataserver.dto.DataServerAnalysis;
 import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
@@ -26,6 +27,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** Data 서버 analysis 를 v2 상세 응답으로 옮기는 부분 */
@@ -140,7 +143,7 @@ class DataProductServiceAnalysisTest {
         DataProductResponse res = callWith(new DataServerProductResponse(
                 done.status(), done.product(), done.reviews(), done.job(),
                 new DataServerAnalysis(raw, a.job(), a.inputHash(), a.modelVersion(),
-                        a.policyVersion(), a.reviewCount(), hasAnalysis ? a.results() : List.of())));
+                        a.policyVersion(), a.reviewCount(), a.sampled(), a.sourceReviewCount(), hasAnalysis ? a.results() : List.of())));
 
         assertThat(res.analysisStatus()).isEqualTo(expected);
         assertThat(res.analysis() != null).isEqualTo(hasAnalysis);
@@ -218,5 +221,70 @@ class DataProductServiceAnalysisTest {
         assertThat(json.get("analysis").isNull()).isTrue();
         assertThat(json.get("analysisStatus").asText()).isEqualTo("NOT_ANALYZED");
         assertThat(json.has("hasAnalysisResult")).isFalse();
+    }
+
+    @Test
+    void v2_analysis에_표본_정보를_싣는다() {
+        DataProductResponse res = callWith("product-analysis-done.json");
+
+        assertThat(res.analysis().reviewCount()).isEqualTo(128);         // 분석 입력(표본) 수
+        assertThat(res.analysis().sampled()).isTrue();
+        assertThat(res.analysis().sourceReviewCount()).isEqualTo(1318);  // Data 가 가진 원본 수
+    }
+
+    @Test
+    void 표본_필드가_없는_구버전_done은_null로_내린다() throws Exception {
+        DataServerProductResponse done = DataServerFixtures.load("product-analysis-done.json");
+        DataServerAnalysis old = DataServerFixtures.MAPPER.readValue("""
+                {"status": "done", "model_version": "m", "policy_version": "rti-v0",
+                 "review_count": 40, "results": []}
+                """, DataServerAnalysis.class);
+
+        DataProductResponse res = callWith(new DataServerProductResponse(
+                done.status(), done.product(), done.reviews(), done.job(), old));
+
+        assertThat(res.analysis()).isNotNull();
+        assertThat(res.analysis().reviewCount()).isEqualTo(40);
+        assertThat(res.analysis().sampled()).isNull();
+        assertThat(res.analysis().sourceReviewCount()).isNull();
+
+        JsonNode analysis = new ObjectMapper().valueToTree(res).get("analysis");
+        assertThat(analysis.get("sampled").isNull()).isTrue();
+        assertThat(analysis.get("sourceReviewCount").isNull()).isTrue();
+    }
+
+    @Test
+    void JSON_응답에_표본_필드가_있다() {
+        JsonNode analysis = new ObjectMapper().valueToTree(callWith("product-analysis-done.json")).get("analysis");
+
+        assertThat(analysis.get("sampled").asBoolean()).isTrue();
+        assertThat(analysis.get("sourceReviewCount").asInt()).isEqualTo(1318);
+        // 표본 상세(sampling)는 이번에 받지 않는다
+        assertThat(analysis.has("sampling")).isFalse();
+    }
+
+    @Test
+    void 받은_분석_상태를_번호표에_적으라고_넘긴다() {
+        callWith("product-analysis-done.json");
+
+        verify(registry).recordAnalysisStatus(new DataServerProductKey("kurly", "1000146248"), AnalysisStatus.DONE);
+    }
+
+    @Test
+    void 수집_대기여도_분석_상태는_넘긴다() {
+        callWith("product-queued.json");
+
+        verify(registry).recordAnalysisStatus(new DataServerProductKey("kurly", "1000146248"),
+                AnalysisStatus.NOT_ANALYZED);
+    }
+
+    @Test
+    void Data_서버에_닿지_못하면_상태를_적지_않는다() {
+        when(dataServerClient.findProduct(any(), any())).thenReturn(Optional.empty());
+
+        DataProductResponse res = service.getProduct("kurly", "1000146248", null);
+
+        assertThat(res.analysisStatus()).isEqualTo(AnalysisStatus.UNAVAILABLE);
+        verify(registry, never()).recordAnalysisStatus(any(), any());
     }
 }

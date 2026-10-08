@@ -1,6 +1,7 @@
 package com.example.fireview.domain.dashboard.service;
 
 import com.example.fireview.domain.dashboard.dto.DashboardResponse;
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.dashboard.entity.ViewHistory;
 import com.example.fireview.domain.dashboard.repository.ViewHistoryRepository;
 import com.example.fireview.domain.onboarding.entity.UserPreference;
@@ -13,6 +14,8 @@ import com.example.fireview.domain.user.entity.OAuthProvider;
 import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
 import com.example.fireview.domain.user.service.UserService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +24,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -93,5 +97,26 @@ class DashboardWithoutDummyTest {
         assertThat(res.recommendedProducts()).isEmpty();
         assertThat(res.recentProducts()).isEmpty();
         assertThat(res.riskyProducts()).isEmpty();
+    }
+
+    @Test
+    void 대시보드_상품에_분석_상태가_실린다() {
+        real.observeAnalysisStatus(AnalysisStatus.DONE, LocalDateTime.now());
+        productRepository.saveAndFlush(real);
+
+        JsonNode json = new ObjectMapper().valueToTree(dashboardService.getPublicDashboard());
+
+        JsonNode product = json.get("recommendedProducts").get(0);
+        assertThat(product.get("externalId").asText()).isEqualTo("kurly-1000146248");
+        assertThat(product.get("analysisStatus").asText()).isEqualTo("DONE");
+    }
+
+    @Test
+    void 분석_상태를_못_본_대시보드_상품은_null이다() {
+        JsonNode json = new ObjectMapper().valueToTree(dashboardService.getPublicDashboard());
+
+        JsonNode product = json.get("recommendedProducts").get(0);
+        assertThat(product.has("analysisStatus")).isTrue();
+        assertThat(product.get("analysisStatus").isNull()).isTrue();
     }
 }

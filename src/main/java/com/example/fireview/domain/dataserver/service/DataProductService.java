@@ -70,6 +70,9 @@ public class DataProductService {
         if (body.hasUsableData() && registry.find(key).isPresent()) {
             cached = registry.upsertForDisplay(body.product());
         }
+        // 목록에 보일 분석 상태도 같은 이유로 번호표에 적는다. 번호표가 없으면 아무것도 하지 않는다.
+        // UNAVAILABLE(Data 미도달·구버전)은 적지 않는다 — 일시 장애가 마지막으로 본 상태를 덮으면 안 된다.
+        registry.recordAnalysisStatus(key, analysisStatus);
 
         return new DataProductResponse(
                 status,
@@ -144,7 +147,9 @@ public class DataProductService {
                 status,
                 analysis.modelVersion(),
                 analysis.policyVersion(),
-                analysis.reviewCount());
+                analysis.reviewCount(),
+                analysis.sampled(),
+                analysis.sourceReviewCount());
     }
 
     private DataProductResponse.ReviewPage toReviewPage(DataServerProductResponse body) {

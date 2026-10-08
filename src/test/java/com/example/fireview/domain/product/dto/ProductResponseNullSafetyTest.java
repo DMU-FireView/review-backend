@@ -1,8 +1,11 @@
 package com.example.fireview.domain.product.dto;
 
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
 import com.example.fireview.domain.review.entity.TrustGrade;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,5 +87,71 @@ class ProductResponseNullSafetyTest {
 
         assertThat(res.dataPlatform()).isNull();
         assertThat(res.externalId()).isNull();
+    }
+
+    @Test
+    void 분석_상태를_못_봤으면_null이다() {
+        assertThat(ProductResponse.from(tagOnly()).analysisStatus()).isNull();
+    }
+
+    @Test
+    void 마지막으로_본_분석_상태를_싣는다() {
+        Product tag = tagOnly();
+        tag.observeAnalysisStatus(AnalysisStatus.DONE, java.time.LocalDateTime.now());
+
+        JsonNode json = new ObjectMapper().valueToTree(ProductResponse.from(tag));
+
+        assertThat(json.get("analysisStatus").asText()).isEqualTo("DONE");
+        // 상품 평균 RTI 는 여전히 없다. 상태가 DONE 이어도 점수를 지어내지 않는다
+        assertThat(json.get("avgRti").isNull()).isTrue();
+    }
+
+    @Test
+    void JSON에_analysisStatus_키가_null로_있다() {
+        JsonNode json = new ObjectMapper().valueToTree(ProductResponse.from(tagOnly()));
+
+        assertThat(json.has("analysisStatus")).isTrue();
+        assertThat(json.get("analysisStatus").isNull()).isTrue();
+    }
+
+    @Test
+    void Data_상품의_모르는_평점은_0이_아니라_null이다() {
+        // 번호표 생성 때 평점이 비면 0.0 이 채워진다(Product.onCreate). 그 0 은 "모름"이다
+        Product tag = tagOnly();
+        tag.setAvgRating(0.0);
+
+        assertThat(ProductResponse.from(tag).avgRating()).isNull();
+        assertThat(ProductResponse.from(tagOnly()).avgRating()).isNull();
+    }
+
+    @Test
+    void Data_상품의_실제_평점은_그대로다() {
+        Product tag = tagOnly();
+        tag.setAvgRating(4.5);
+
+        assertThat(ProductResponse.from(tag).avgRating()).isEqualTo(4.5);
+    }
+
+    @Test
+    void Data_상품의_리뷰_수_0은_그대로다() {
+        // 실제 0 개와 모름을 가를 근거가 없어 바꾸지 않는다
+        Product tag = tagOnly();
+        tag.setReviewCount(0);
+
+        assertThat(ProductResponse.from(tag).reviewCount()).isZero();
+    }
+
+    @Test
+    void 레거시_상품의_평점과_상태는_바꾸지_않는다() {
+        Product legacy = Product.builder().id(900000000000L).name("삼성 갤럭시")
+                .platform("NAVER").category(Category.DIGITAL_MOBILE).avgRti(80.0)
+                .reviewCount(0).avgRating(0.0).build();
+
+        ProductResponse res = ProductResponse.from(legacy);
+
+        assertThat(res.avgRating()).isEqualTo(0.0);
+        assertThat(res.reviewCount()).isZero();
+        assertThat(res.analysisStatus()).isNull();
+        assertThat(res.avgRti()).isEqualTo(80.0);
     }
 }

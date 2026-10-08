@@ -1,5 +1,6 @@
 package com.example.fireview.domain.product.entity;
 
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -85,6 +86,24 @@ public class Product {
 
     private LocalDateTime createdAt;
 
+    /**
+     * v2 상세를 열 때 Data 서버에서 마지막으로 본 신뢰도 분석 상태. <b>아직 못 봤으면 null 이다.</b>
+     *
+     * <p>목록은 상품마다 Data 서버를 부를 수 없어 이 값을 그대로 보여준다. 원본은 Data 서버이고,
+     * 누군가 상세를 열어야 갱신되므로 실제 상태보다 늦을 수 있다.
+     * {@link AnalysisStatus#UNAVAILABLE}(Data 미도달·구버전)은 적지 않는다 — 일시 장애가
+     * 마지막으로 본 상태를 지우면 안 된다.
+     *
+     * <p>운영은 {@code ddl-auto=update} 라 NOT NULL 칼럼을 기존 행에 붙이지 못한다. nullable 로 둔다.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "analysis_status", length = 20)
+    private AnalysisStatus analysisStatus;
+
+    /** {@link #analysisStatus} 가 지금 값으로 바뀐 것을 처음 본 시각. 같은 상태를 다시 봐도 고치지 않는다 */
+    @Column(name = "analysis_status_at")
+    private LocalDateTime analysisStatusAt;
+
     /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_platform_links",
@@ -121,6 +140,21 @@ public class Product {
         // 모르는 값은 null 로 둔다.
         if (reviewCount == null) reviewCount = 0;
         if (avgRating == null) avgRating = 0.0;
+    }
+
+    /**
+     * Data 서버에서 본 분석 상태를 적는다.
+     *
+     * @return 값을 바꿨으면 true. 같은 상태거나 적지 않는 값({@code null}, {@code UNAVAILABLE})이면
+     *         false 이고 아무것도 바꾸지 않는다 — 바뀐 필드가 없으면 UPDATE 도 나가지 않는다
+     */
+    public boolean observeAnalysisStatus(AnalysisStatus status, LocalDateTime observedAt) {
+        if (status == null || status == AnalysisStatus.UNAVAILABLE || status == analysisStatus) {
+            return false;
+        }
+        this.analysisStatus = status;
+        this.analysisStatusAt = observedAt;
+        return true;
     }
 
     /** AI 서버 분석 결과로 평균 RTI 업데이트 */

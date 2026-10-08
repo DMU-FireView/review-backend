@@ -54,16 +54,29 @@ public record DataProductResponse(
      * <p>상품 평균 RTI·등급은 넣지 않는다. Data 서버가 주는 결과는 지금 리뷰 페이지 것뿐이라
      * Spring 이 평균을 내면 20건 표본 평균이 된다. Data 서버가 전체로 계산해 줄 때 붙인다.
      *
-     * @param status        분석 상태. 지금은 {@code DONE} 뿐이다
-     * @param modelVersion  분석한 AI 모델 버전
-     * @param policyVersion 등급 정책 버전 (예: {@code rti-v0})
-     * @param reviewCount   분석 job 에 들어간 리뷰 전체 수. 상품 리뷰 수와 다를 수 있다. 모르면 null
+     * <p><b>리뷰 수가 셋이다.</b> 서로 다른 것을 센다.
+     * <ul>
+     *   <li>{@code analysis.reviewCount} — 분석에 실제로 넣은 리뷰 수(표본 수)</li>
+     *   <li>{@code analysis.sourceReviewCount} — 표본을 고를 때 Data 서버가 가진 원본 리뷰 수</li>
+     *   <li>{@code product.reviewCount} — 쇼핑몰이 표시하는 전체 리뷰 수</li>
+     * </ul>
+     * {@code sampled} 가 true 면 표본에 들지 않은 리뷰는 DONE 이어도 {@code rti} 가 null 이다.
+     *
+     * @param status            분석 상태. 지금은 {@code DONE} 뿐이다
+     * @param modelVersion      분석한 AI 모델 버전
+     * @param policyVersion     등급 정책 버전 (예: {@code rti-v0})
+     * @param reviewCount       분석 입력(표본) 리뷰 수. 상품 리뷰 수와 다를 수 있다. 모르면 null
+     * @param sampled           표본으로 일부만 분석했으면 true, 전수 분석이면 false.
+     *                          구버전 Data 서버라 모르면 null
+     * @param sourceReviewCount Data 서버가 가진 원본 리뷰 수. 구버전 Data 서버라 모르면 null
      */
     public record ProductAnalysis(
             AnalysisStatus status,
             String modelVersion,
             String policyVersion,
-            Integer reviewCount
+            Integer reviewCount,
+            Boolean sampled,
+            Integer sourceReviewCount
     ) {}
 
     /**
