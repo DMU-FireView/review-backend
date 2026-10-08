@@ -20,19 +20,30 @@ public interface ReportRepository extends JpaRepository<Report, Long> {
             Long reporterId, Long productId, String externalReviewId);
 
     /** 내가 신고한 목록 (최신순) */
-    @Query("SELECT r FROM Report r JOIN FETCH r.review rv JOIN FETCH rv.product "
-         + "WHERE r.reporter.id = :userId ORDER BY r.createdAt DESC")
+    @Query(value = "SELECT r FROM Report r LEFT JOIN FETCH r.review rv LEFT JOIN FETCH rv.product "
+         + "LEFT JOIN FETCH r.product "
+         + "WHERE r.reporter.id = :userId ORDER BY r.createdAt DESC, r.id DESC",
+         countQuery = "SELECT COUNT(r) FROM Report r LEFT JOIN r.review rv LEFT JOIN rv.product "
+         + "LEFT JOIN r.product WHERE r.reporter.id = :userId")
     Page<Report> findByReporterIdWithReview(@Param("userId") Long userId, Pageable pageable);
 
     /** 특정 신고 단건 조회 (신고자 본인 확인용) */
     Optional<Report> findByIdAndReporter_Id(Long reportId, Long reporterId);
 
     /** 전체 신고 목록 (관리자용, 상태 필터) */
-    Page<Report> findByStatus(ReportStatus status, Pageable pageable);
+    @Query(value = "SELECT r FROM Report r JOIN FETCH r.reporter "
+         + "LEFT JOIN FETCH r.review rv LEFT JOIN FETCH rv.product LEFT JOIN FETCH r.product "
+         + "WHERE r.status = :status ORDER BY r.createdAt DESC, r.id DESC",
+         countQuery = "SELECT COUNT(r) FROM Report r LEFT JOIN r.review rv LEFT JOIN rv.product "
+         + "LEFT JOIN r.product WHERE r.status = :status")
+    Page<Report> findByStatus(@Param("status") ReportStatus status, Pageable pageable);
 
     /** 전체 신고 목록 (관리자용, 전체) */
-    @Query("SELECT r FROM Report r JOIN FETCH r.reporter JOIN FETCH r.review "
-         + "ORDER BY r.createdAt DESC")
+    @Query(value = "SELECT r FROM Report r JOIN FETCH r.reporter "
+         + "LEFT JOIN FETCH r.review rv LEFT JOIN FETCH rv.product LEFT JOIN FETCH r.product "
+         + "ORDER BY r.createdAt DESC, r.id DESC",
+         countQuery = "SELECT COUNT(r) FROM Report r LEFT JOIN r.review rv LEFT JOIN rv.product "
+         + "LEFT JOIN r.product")
     Page<Report> findAllWithDetails(Pageable pageable);
 
     /** 내가 제출한 신고 수 */
