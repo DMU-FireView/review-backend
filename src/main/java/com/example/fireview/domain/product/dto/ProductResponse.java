@@ -1,5 +1,6 @@
 package com.example.fireview.domain.product.dto;
 
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.product.client.NaverShoppingItem;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.MajorCategory;
@@ -46,7 +47,8 @@ public record ProductResponse(
         // ── Data 서버 상품일 때만 채워진다. 더미·네이버 검색 결과는 null ──
         String dataPlatform,               // 수집기 이름 (kurly, oliveyoung ...). 소문자
         String dataProductId,              // 쇼핑몰 원본 상품 ID
-        String externalId                  // "{dataPlatform}-{dataProductId}". 챗봇 productId 에 그대로 넣는다
+        String externalId,                 // "{dataPlatform}-{dataProductId}". 챗봇 productId 에 그대로 넣는다
+        AnalysisStatus analysisStatus      // v2 상세에서 마지막으로 본 분석 상태. 아직 못 봤으면 null
 ) {
     /**
      * 네이버 쇼핑 검색 결과 아이템 → ProductResponse 변환.
@@ -87,7 +89,8 @@ public record ProductResponse(
                 price,
                 item.mallName().isBlank() ? "NAVER" : item.mallName(),
                 item.link(),                    // AI 분석 요청 시 productUrl로 사용
-                null, null, null
+                null, null, null,
+                null
         );
     }
 
@@ -126,14 +129,32 @@ public record ProductResponse(
                 grade == null ? null : grade.toLevel(),
                 grade == null ? null : grade.getColor(),
                 product.getReviewCount(),
-                product.getAvgRating(),
+                avgRating(product),
                 platformDtos,
                 product.getLowestPrice(),
                 product.getLowestPlatform(),
                 null,   // DB 상품은 platformLinks에 URL이 있으므로 별도 productUrl 불필요
                 product.getDataPlatform(),
                 product.getDataProductId(),
-                product.dataServerExternalId()
+                product.dataServerExternalId(),
+                product.getAnalysisStatus()
         );
+    }
+
+    /**
+     * Data 서버 상품의 평점이 0 이하면 null 로 내린다.
+     *
+     * <p>번호표를 만들 때 평점이 비어 있으면 0.0 이 채워진다(Product.onCreate). Data 서버가 평점을
+     * 주지 않은 상품(컬리 등)은 그 0.0 이 그대로 남아 목록에 "0점"으로 보였다. 그 0 은 "모름"이다.
+     * 평점은 1~5 점이라 실제 0 점은 없다. 상세(DataProductService.cachedRating)와 같은 기준이다.
+     *
+     * <p>Data 서버 주소가 없는 기존 상품은 손대지 않는다.
+     */
+    private static Double avgRating(Product product) {
+        Double rating = product.getAvgRating();
+        if (product.hasDataServerAddress() && (rating == null || rating <= 0)) {
+            return null;
+        }
+        return rating;
     }
 }

@@ -100,4 +100,27 @@ class DataServerAnalysisJsonTest {
         assertThat(analysis.results()).isEmpty();
         assertThat(analysis.reviewCount()).isNull();
     }
+
+    @Test
+    void 표본_정보를_읽는다() {
+        // review_count 는 분석 입력(표본) 수, source_review_count 는 Data 가 가진 원본 리뷰 수
+        DataServerAnalysis analysis = DataServerFixtures.load("product-analysis-done.json").analysis();
+
+        assertThat(analysis.sampled()).isTrue();
+        assertThat(analysis.sourceReviewCount()).isEqualTo(1318);
+        assertThat(analysis.reviewCount()).isEqualTo(128);
+    }
+
+    @Test
+    void 표본_필드가_없는_구버전_done은_null로_둔다() throws JsonProcessingException {
+        // Data #80 이전 응답. 모르는 값을 false·0 으로 채우면 "전수 분석"으로 읽힌다
+        DataServerAnalysis analysis = DataServerFixtures.MAPPER.readValue("""
+                {"status": "done", "model_version": "m", "policy_version": "rti-v0",
+                 "review_count": 40, "results": []}
+                """, DataServerAnalysis.class);
+
+        assertThat(analysis.sampled()).isNull();
+        assertThat(analysis.sourceReviewCount()).isNull();
+        assertThat(analysis.reviewCount()).isEqualTo(40);
+    }
 }

@@ -26,7 +26,12 @@ import java.util.stream.Collectors;
  * <p><b>{@code results} 는 이번 응답의 리뷰 페이지에 있는 리뷰만 담긴다.</b>
  * 상품 전체 결과가 아니므로 이걸로 상품 평균을 내면 한 페이지 표본 평균이 된다.
  *
- * @param reviewCount 분석 job 에 들어간 리뷰 전체 수. job 이 없으면 0
+ * @param reviewCount       분석 입력(표본) 리뷰 수 = {@code job.input_review_count}. job 이 없으면 0.
+ *                          Data #80 부터 리뷰가 많으면 일부만 골라 분석하므로 원본 리뷰 수보다 작을 수 있다
+ * @param sampled           표본으로 일부만 분석했는지. 전수 분석이면 false.
+ *                          job 이 없거나 이 필드를 모르는 구버전 Data 서버면 null
+ * @param sourceReviewCount 표본을 고를 때 Data 서버가 가진 원본 리뷰 수. 쇼핑몰이 표시하는
+ *                          전체 리뷰 수와는 다를 수 있다. job 이 없거나 구버전이면 null
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DataServerAnalysis(
@@ -36,6 +41,8 @@ public record DataServerAnalysis(
         @JsonProperty("model_version") String modelVersion,
         @JsonProperty("policy_version") String policyVersion,
         @JsonProperty("review_count") Integer reviewCount,
+        Boolean sampled,
+        @JsonProperty("source_review_count") Integer sourceReviewCount,
         List<DataServerReviewAnalysis> results
 ) {
 

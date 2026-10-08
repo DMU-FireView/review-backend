@@ -1,7 +1,9 @@
 package com.example.fireview.domain.product.entity;
 
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -20,6 +22,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+// 바뀐 칼럼만 UPDATE 한다. 표시 정보 저장(ProductTagRegistry.upsertForDisplay)과 분석 상태 기록이
+// 같은 행에서 겹치면, 전체 칼럼 UPDATE 는 읽을 때의 옛 상태를 그대로 다시 써 방금 기록된 DONE 을
+// null 로 되돌렸다(#205). 상태 칼럼에 updatable=false 를 거는 방법도 있지만, 그러면 엔티티에서
+// 상태를 바꿔도 조용히 저장되지 않는 함정이 생겨 이쪽을 택했다. 상태 기록 자체는
+// ProductRepository.updateAnalysisStatus 가 칼럼을 지정해 따로 쓴다.
+@DynamicUpdate
 public class Product {
 
     @Id
@@ -85,6 +93,31 @@ public class Product {
 
     private LocalDateTime createdAt;
 
+    /**
+     * v2 상세를 열 때 Data 서버에서 마지막으로 본 신뢰도 분석 상태. <b>아직 못 봤으면 null 이다.</b>
+     *
+     * <p>목록은 상품마다 Data 서버를 부를 수 없어 이 값을 그대로 보여준다. 원본은 Data 서버이고,
+     * 누군가 상세를 열어야 갱신되므로 실제 상태보다 늦을 수 있다.
+     * {@link AnalysisStatus#UNAVAILABLE}(Data 미도달·구버전)은 적지 않는다 — 일시 장애가
+     * 마지막으로 본 상태를 지우면 안 된다.
+     *
+     * <p>운영은 {@code ddl-auto=update} 라 NOT NULL 칼럼을 기존 행에 붙이지 못한다. nullable 로 둔다.
+     *
+     * <p><b>enum 이 아니라 문자열 칼럼이다.</b> {@code @Enumerated(STRING)} 이면 Hibernate 가
+     * PostgreSQL 에 {@code CHECK (analysis_status IN (...))} 를 붙이는데, {@code ddl-auto=update} 는
+     * enum 에 값을 더해도 이 제약을 고치지 않아 새 상태 저장이 DB 에서 거부된다(#205).
+     * 변환은 {@link #getAnalysisStatus()} 에서 한다. 읽기 전용 접근자만 두고 쓰기는
+     * {@link #observeAnalysisStatus} 와 {@code ProductRepository.updateAnalysisStatus} 로만 한다.
+     */
+    @Column(name = "analysis_status", length = 20)
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
+    private String analysisStatus;
+
+    /** {@link #analysisStatus} 가 지금 값으로 바뀐 것을 처음 본 시각. 같은 상태를 다시 봐도 고치지 않는다 */
+    @Column(name = "analysis_status_at")
+    private LocalDateTime analysisStatusAt;
+
     /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "product_platform_links",
@@ -121,6 +154,38 @@ public class Product {
         // 모르는 값은 null 로 둔다.
         if (reviewCount == null) reviewCount = 0;
         if (avgRating == null) avgRating = 0.0;
+    }
+
+    /**
+     * 저장된 분석 상태. 못 봤으면 null 이다.
+     *
+     * <p>이 버전이 모르는 저장값(새 버전이 적은 상태, 손으로 고친 값)도 null 로 읽는다.
+     * 모르는 값으로 예외를 내면 그 상품이 들어간 목록 전체가 깨진다.
+     */
+    public AnalysisStatus getAnalysisStatus() {
+        if (analysisStatus == null) return null;
+        for (AnalysisStatus status : AnalysisStatus.values()) {
+            if (status.name().equals(analysisStatus)) return status;
+        }
+        return null;
+    }
+
+    /**
+     * Data 서버에서 본 분석 상태를 이 엔티티에 적는다.
+     *
+     * <p>v2 상세 경로는 이 메서드가 아니라 {@code ProductTagRegistry.recordAnalysisStatus} 로
+     * 칼럼만 지정해 쓴다. 읽어 둔 엔티티를 거치면 그 사이 다른 요청이 쓴 값과 경합한다.
+     *
+     * @return 값을 바꿨으면 true. 같은 상태거나 적지 않는 값({@code null}, {@code UNAVAILABLE})이면
+     *         false 이고 아무것도 바꾸지 않는다 — 바뀐 필드가 없으면 UPDATE 도 나가지 않는다
+     */
+    public boolean observeAnalysisStatus(AnalysisStatus status, LocalDateTime observedAt) {
+        if (status == null || status == AnalysisStatus.UNAVAILABLE || status.name().equals(analysisStatus)) {
+            return false;
+        }
+        this.analysisStatus = status.name();
+        this.analysisStatusAt = observedAt;
+        return true;
     }
 
     /** AI 서버 분석 결과로 평균 RTI 업데이트 */

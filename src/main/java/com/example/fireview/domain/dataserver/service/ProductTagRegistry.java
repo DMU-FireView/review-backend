@@ -3,6 +3,7 @@ package com.example.fireview.domain.dataserver.service;
 import com.example.fireview.domain.dataserver.DataServerCategoryMapper;
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.PlatformLink;
 import com.example.fireview.domain.product.entity.Product;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 
 /**
  * Data 서버 상품에 Spring 쪽 번호표를 붙인다.
@@ -70,7 +72,8 @@ public class ProductTagRegistry {
      * <p><b>표시용 캐시다.</b> 홈·검색 목록은 상품 20개를 보여줄 때 Data 서버를 20번 부를 수
      * 없어서 이름·가격·이미지·카테고리·리뷰 수·구매 링크만 이 행에 적어 둔다. 원본은
      * 여전히 Data 서버이고, 검색·상세 조회 때마다 다시 덮이므로 잠깐 낡을 수는 있어도
-     * 오래 어긋나지 않는다. 리뷰와 신뢰도 분석은 적어 두지 않는다.
+     * 오래 어긋나지 않는다. 리뷰와 신뢰도 점수는 적어 두지 않는다
+     * (분석 <i>상태</i>만 {@link #recordAnalysisStatus} 가 따로 적는다).
      *
      * <p>몰 카테고리 원문은 {@code subCategory} 에 그대로 두고, 그 원문과 상품명으로
      * {@code Category} 를 분류해 넣는다({@link DataServerCategoryMapper}). 분류 근거가 없으면
@@ -123,6 +126,29 @@ public class ProductTagRegistry {
                     .build());
         }
         return product;
+    }
+
+    /**
+     * v2 상세에서 본 분석 상태를 번호표에 적는다. 목록이 이 값으로 "분석 완료/진행 중"을 보여준다.
+     *
+     * <p>번호표가 없으면 만들지 않는다 — {@link #upsertForDisplay} 와 같은 이유다.
+     * {@code UNAVAILABLE} 은 적지 않고, 이미 같은 상태면 쓰지 않는다.
+     * 실제로 바꿨을 때만 홈 목록 캐시를 비운다.
+     *
+     * <p>엔티티를 읽어 고치지 않고 두 칼럼만 지정해 UPDATE 한다
+     * ({@link ProductRepository#updateAnalysisStatus}). 엔티티 저장은 읽은 시점의 다른 칼럼까지
+     * 다시 써서, 동시에 들어온 검색의 표시 정보 저장과 서로 덮었다(#205).
+     *
+     * @return 상태를 바꿨으면 true
+     */
+    @Transactional
+    @CacheEvict(value = "productList", allEntries = true, condition = "#result")
+    public boolean recordAnalysisStatus(DataServerProductKey key, AnalysisStatus status) {
+        if (status == null || status == AnalysisStatus.UNAVAILABLE) {
+            return false;
+        }
+        return productRepository.updateAnalysisStatus(
+                key.platform(), key.productId(), status.name(), LocalDateTime.now()) > 0;
     }
 
     /**

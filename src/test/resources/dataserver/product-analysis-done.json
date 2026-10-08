@@ -15,6 +15,10 @@
     "model_version": "rti-model-0.5",
     "policy_version": "rti-v0",
     "review_count": 128,
+    "sampled": true,
+    "source_review_count": 1318,
+    "sampling": {"sampled": true, "method": "rating_stratified", "source_review_count": 1318,
+                 "analyzed_review_count": 128},
     "results": [
       {"review_id": "r-1", "rti": 82.5, "level": "safe", "text_score": 80.0, "behavior_score": null,
        "network_score": 90.0, "reasons": ["TEXT_SPECIFIC_DETAIL"], "unknown_result_field": "x"},
