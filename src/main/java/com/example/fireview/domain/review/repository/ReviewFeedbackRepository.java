@@ -20,11 +20,14 @@ public interface ReviewFeedbackRepository extends JpaRepository<ReviewFeedback, 
             Long userId, Long productId, String externalReviewId);
 
     /** 내가 제출한 피드백 목록 (리뷰+상품 JOIN FETCH, 최신순) */
-    @Query("SELECT f FROM ReviewFeedback f "
-         + "JOIN FETCH f.review r "
-         + "JOIN FETCH r.product "
+    @Query(value = "SELECT f FROM ReviewFeedback f "
+         + "LEFT JOIN FETCH f.review r "
+         + "LEFT JOIN FETCH r.product LEFT JOIN FETCH f.product "
          + "WHERE f.user.id = :userId "
-         + "ORDER BY f.createdAt DESC")
+         + "ORDER BY f.createdAt DESC, f.id DESC",
+         countQuery = "SELECT COUNT(f) FROM ReviewFeedback f "
+         + "LEFT JOIN f.review r LEFT JOIN r.product LEFT JOIN f.product "
+         + "WHERE f.user.id = :userId")
     Page<ReviewFeedback> findByUserIdWithReview(@Param("userId") Long userId, Pageable pageable);
 
     /** 내가 제출한 피드백 단건 조회 (본인 확인) */
