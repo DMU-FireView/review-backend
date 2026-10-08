@@ -130,11 +130,12 @@ public class UserService {
                         w.getCreatedAt()
                 )));
 
+        // 외부(Data 서버) 리뷰 피드백은 내부 리뷰가 없다. 대상 ID 로 외부 리뷰 ID 를 쓴다
         feedbackRepository.findByUserIdWithReview(user.getId(), PageRequest.of(0, 5))
                 .forEach(f -> activities.add(new UserActivityResponse(
                         "FEEDBACK_SUBMIT",
                         "분석 결과 피드백 제출",
-                        String.valueOf(f.getReview().getId()),
+                        f.reviewIdOrNull() != null ? f.reviewIdOrNull().toString() : f.getExternalReviewId(),
                         f.getCreatedAt()
                 )));
 
