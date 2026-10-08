@@ -22,7 +22,7 @@
 | 종류 | 설명 | 엔드포인트 prefix |
 |------|------|-----------------|
 | ReviewFeedback | 리뷰 REAL/FAKE 투표 | `/api/reviews` |
-| AnalysisFeedback | RTI 분석 결과 이의 제기 | `/api/analysis-feedbacks` |
+| AnalysisFeedback | RTI 분석 결과 이의 제기 (Spring 리뷰·Data 서버 리뷰) | `/api/analysis-feedbacks` |
 | 통합 조회 | 위 두 가지 + 신고 합산 | `/api/users/me/feedback` |
 
 ---
@@ -171,6 +171,52 @@ Authorization: Bearer {token}
   }
 }
 ```
+
+#### Data 서버 리뷰 (v2 상품 상세에서 본 리뷰)
+
+```
+POST /api/analysis-feedbacks/external/{platform}/{productId}/reviews/{externalReviewId}
+Authorization: Bearer {token}
+```
+
+Request Body 는 위와 같다. 예: `POST /api/analysis-feedbacks/external/kurly/1000146248/reviews/r-99`
+
+**Response 200** — Spring DB 에 리뷰 행이 없으므로 `reviewId`·`reviewContent` 가 null 이고,
+`externalReviewId`·`productExternalId` 가 채워진다(`productName` 은 상품 번호표에서 온다).
+```json
+{
+  "success": true,
+  "message": "분석 피드백이 접수되었습니다.",
+  "data": {
+    "feedbackId": 12,
+    "reviewId": null,
+    "reviewContent": null,
+    "productName": "토리든 마스크팩",
+    "feedbackType": "SCORE_MISMATCH",
+    "feedbackTypeDescription": "점수가 맞지 않아요",
+    "userJudgment": "MORE_TRUSTWORTHY",
+    "relatedSignals": ["텍스트 표현"],
+    "detail": "...",
+    "attachmentUrl": null,
+    "replyEmail": null,
+    "status": "SUBMITTED",
+    "statusDescription": "접수",
+    "createdAt": "2026-10-08T14:00:00",
+    "updatedAt": "2026-10-08T14:00:00",
+    "externalReviewId": "r-99",
+    "productExternalId": "kurly-1000146248"
+  }
+}
+```
+
+| 응답 | 상황 |
+|---|---|
+| `409 PRODUCT_NOT_COLLECTED` | 상품이 아직 수집 전 |
+| `503 DATA_SERVER_UNAVAILABLE` | Data 서버에 닿지 못함 (번호표가 없을 때만 Data 서버를 부른다) |
+| `400 INVALID_INPUT` | `externalReviewId` 공백 또는 200자 초과 |
+
+> 서버는 그 리뷰가 그 상품에 실제로 있는지, 분석 결과가 있는지 **확인하지 않는다** (Data 서버에 단건 검증 API 가 없다).
+> 분석 결과가 있는 리뷰에서만 제출 UI 를 열 것. Spring 리뷰 응답에서는 `externalReviewId`·`productExternalId` 가 null 이다.
 
 **status 진행 단계**
 | status | 의미 |
@@ -462,6 +508,10 @@ Authorization: Bearer {adminToken}
 | `UNDER_REVIEW` | 검토 중 |
 | `RESOLVED` | 처리 완료 |
 | `REJECTED` | 반려 |
+
+Spring 리뷰 대상과 Data 서버 리뷰 대상이 한 목록에 섞여 나온다. Data 서버 리뷰 행은 `reviewId`·`reviewContent` 가
+null 이고 `externalReviewId`·`productExternalId` 로 상품 상세(`/api/v2/products/{platform}/{productId}`)에
+들어가 해당 리뷰를 확인한다(3-1 응답 참고).
 
 ---
 

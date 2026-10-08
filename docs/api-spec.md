@@ -472,14 +472,15 @@ Data 서버 상품을 **찜·장바구니에 쓸 수 있는 Spring 상품 번호
 
 ---
 
-## 6-3. Data 서버 리뷰 신고·피드백 — **인증 필요**
+## 6-3. Data 서버 리뷰 신고·피드백·분석 피드백 — **인증 필요**
 
 | Method | Path |
 |--------|------|
 | POST | `/api/reports/external/{platform}/{productId}/reviews/{externalReviewId}` |
 | POST | `/api/reviews/external/{platform}/{productId}/reviews/{externalReviewId}/feedback` |
+| POST | `/api/analysis-feedbacks/external/{platform}/{productId}/reviews/{externalReviewId}` |
 
-`/api/v2/products/**` 로 조회한 리뷰를 신고하거나 실제/가짜 피드백을 남긴다.
+`/api/v2/products/**` 로 조회한 리뷰를 신고하거나 실제/가짜 피드백, 분석 결과 피드백을 남긴다.
 `externalReviewId` 는 쇼핑몰이 발급한 원본 값(`reviews.items[].reviewId`)을 그대로 넣는다.
 요청 본문은 기존 신고·피드백 API 와 같다.
 
@@ -488,8 +489,16 @@ Data 서버 상품을 **찜·장바구니에 쓸 수 있는 Spring 상품 번호
 | 응답 | 상황 |
 |---|---|
 | `409 PRODUCT_NOT_COLLECTED` | 아직 수집 전인 상품. 실재하지 않는 리뷰에 기록이 쌓이지 않게 막는다 |
-| `409 REPORT_ALREADY_EXISTS` / `FEEDBACK_ALREADY_EXISTS` | 같은 리뷰에 두 번 |
+| `409 REPORT_ALREADY_EXISTS` / `FEEDBACK_ALREADY_EXISTS` | 같은 리뷰에 두 번 (분석 피드백은 기존 경로처럼 여러 번 허용) |
+| `400 INVALID_INPUT` | (분석 피드백) `externalReviewId` 가 공백이거나 200자 초과 |
 | `503 DATA_SERVER_UNAVAILABLE` | Data 서버에 닿지 못함 |
+
+### 분석 피드백은 리뷰·분석 결과의 실존을 확인하지 않는다
+
+검증 수준은 신고·리뷰 피드백과 같다 — **상품**이 수집됐는지만 본다(번호표가 이미 있으면 Data 서버도 부르지 않는다).
+그 리뷰가 실제로 그 상품에 있는지, 그 리뷰의 분석 결과가 있는지는 확인하지 않는다.
+Data 서버에 리뷰(또는 분석 결과) 단건 검증 API 가 없고, 상품 분석 조회는 현재 페이지 결과만 돌려주기 때문이다.
+프론트는 분석 결과가 있는 리뷰에서만 제출 버튼을 보여 준다. 단건 검증 계약이 생기면 서버에서 확인하도록 바꾼다.
 
 ### 리뷰 본문은 저장하지 않는다
 
@@ -501,6 +510,7 @@ Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으�
 
 `productName` 과 `productExternalId` 는 채워지므로, 운영자는 상품으로 들어가 해당 리뷰를 확인한다.
 기존 Spring 리뷰에 대한 신고·피드백은 **전과 동일하게** 본문까지 내려온다.
+분석 피드백(`AnalysisFeedbackResponse` — 내 목록·단건·관리자 목록·검수 처리)과 통합 내역(`/api/feedback/me`)도 같다.
 
 ---
 
@@ -785,7 +795,8 @@ LLM 을 부르지 않으므로 빠르고, 쿼터를 깎지 않는다. 채팅 화
 | POST | `/api/reports/reviews/{reviewId}` | 리뷰 신고 |
 | GET | `/api/reports/me` | 내 신고 목록 |
 | GET | `/api/reports/me/{reportId}` | 내 신고 상세 |
-| POST | `/api/analysis-feedbacks/reviews/{reviewId}` | 분석 결과 피드백 |
+| POST | `/api/analysis-feedbacks/reviews/{reviewId}` | 분석 결과 피드백 (Spring 리뷰) |
+| POST | `/api/analysis-feedbacks/external/{platform}/{productId}/reviews/{externalReviewId}` | 분석 결과 피드백 (Data 서버 리뷰, 6-3 절) |
 | GET | `/api/analysis-feedbacks/me` | 내 분석 피드백 목록 |
 | GET | `/api/analysis-feedbacks/me/{feedbackId}` | 내 분석 피드백 상세 |
 | GET | `/api/feedback/me` | **통합** 피드백 현황 (신고 + 분석 피드백) |

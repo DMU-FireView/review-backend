@@ -46,13 +46,13 @@
 --
 -- ⚠️ 실제 사용자 데이터도 함께 지워진다.
 --   더미 상품에 대한 찜(wishlists), 장바구니(cart_items), 조회 이력(view_histories),
---   더미 리뷰에 대한 신고(reports), 리뷰 피드백(review_feedbacks), 분석 피드백(analysis_feedbacks)은
---   실제 사용자가 남긴 행이어도 상품·리뷰가 사라지면 FK 때문에 남길 수 없다.
+--   더미 리뷰 또는 더미 상품(외부 리뷰 대상)에 대한 신고(reports), 리뷰 피드백(review_feedbacks),
+--   분석 피드백(analysis_feedbacks)은 실제 사용자가 남긴 행이어도 상품·리뷰가 사라지면 FK 때문에 남길 수 없다.
 --   아래 조회 결과에서 건수를 확인하고, 필요하면 실행 전에 따로 보관한다.
 --   신고·피드백 처리 결과 알림(notifications)은 FK 가 없어 남는다(target_url 이 사라진 신고를 가리킬 수 있다).
 --
 -- 사용자 계정(users 와 사용자 종속 테이블)과 번호표가 있는 실제 상품은 삭제하지 않는다.
--- FK 제약은 비활성화하지 않는다. 잠금 직후 FK 목록을 엔티티 기준 12개와 대조해, 다르면 삭제 전에 중단한다.
+-- FK 제약은 비활성화하지 않는다. 잠금 직후 FK 목록을 엔티티 기준 13개와 대조해, 다르면 삭제 전에 중단한다.
 --   운영은 ddl-auto=update 라 엔티티에 없는 FK 가 남아 있을 수 있다. ON DELETE CASCADE / SET NULL 인
 --   FK 는 지울 때 오류 없이 다른 행을 지우거나 바꾸므로, 건수 가드로는 잡히지 않는다.
 --   삭제 대상 테이블이 상속·파티션 관계에 있어도 중단한다(엔티티 스키마에는 없다).
@@ -78,8 +78,10 @@ SET LOCAL fireview.expected_dummy_reviews = '1117';
 -- 대상을 고르기 전에 상품·리뷰 쓰기를 막는다. 읽기는 막지 않는다.
 LOCK TABLE products, reviews IN SHARE ROW EXCLUSIVE MODE;
 
--- FK 사전 점검. 이 파일이 행을 지우는 테이블을 가리키는 FK 전체가 아래 12개와 정확히 같아야 한다
+-- FK 사전 점검. 이 파일이 행을 지우는 테이블을 가리키는 FK 전체가 아래 13개와 정확히 같아야 한다
 -- (2026-10 Hibernate 가 엔티티로 PostgreSQL 16 에 만든 스키마 기준).
+-- analysis_feedbacks.product_id 는 #208(외부 리뷰 분석 피드백)에서 생겼다. 그 배포 전 스키마에는 없으므로
+-- #208 배포(ddl-auto=update 로 칼럼·FK 추가) 뒤에 실행한다. 배포 전이면 이 점검이 missing 으로 중단한다.
 -- 하나라도 더 있거나 없거나, 같은 FK 가 두 번 이상 있거나, 칼럼·대상이 다르거나, ON DELETE / ON UPDATE 가
 -- NO ACTION·RESTRICT 가 아니거나, 지연 검사(DEFERRABLE)이거나, 검증되지 않은(NOT VALID) FK 면 중단한다.
 -- 제약 이름은 Hibernate 가 해시로 만들어 환경마다 다를 수 있으므로 테이블·칼럼 번호로 비교한다.
@@ -123,6 +125,7 @@ BEGIN
         ('product_platform_links', 'product_id', 'products'),
         ('reports', 'product_id', 'products'),
         ('review_feedbacks', 'product_id', 'products'),
+        ('analysis_feedbacks', 'product_id', 'products'),
         ('analysis_feedbacks', 'review_id', 'reviews'),
         ('reports', 'review_id', 'reviews'),
         ('review_feedbacks', 'review_id', 'reviews'),
@@ -217,9 +220,10 @@ UNION ALL SELECT 'reviews (대상)', COUNT(*) FROM dummy_reviews
 UNION ALL SELECT 'review_reasons', COUNT(*) FROM review_reasons
     WHERE review_id IN (SELECT id FROM dummy_reviews)
 UNION ALL SELECT 'analysis_feedbacks', COUNT(*) FROM analysis_feedbacks
-    WHERE review_id IN (SELECT id FROM dummy_reviews)
+    WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
 UNION ALL SELECT 'analysis_feedback_signals', COUNT(*) FROM analysis_feedback_signals
-    WHERE feedback_id IN (SELECT id FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews))
+    WHERE feedback_id IN (SELECT id FROM analysis_feedbacks
+        WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products))
 UNION ALL SELECT 'review_feedbacks', COUNT(*) FROM review_feedbacks
     WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
 UNION ALL SELECT 'reports', COUNT(*) FROM reports
@@ -240,7 +244,7 @@ FROM (
     UNION ALL SELECT user_id, 'review_feedbacks' FROM review_feedbacks
         WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
     UNION ALL SELECT user_id, 'analysis_feedbacks' FROM analysis_feedbacks
-        WHERE review_id IN (SELECT id FROM dummy_reviews)
+        WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
 ) t JOIN users u ON u.id = t.user_id
 GROUP BY u.id, u.email, t.kind ORDER BY u.id, t.kind;
 
@@ -257,11 +261,12 @@ DECLARE
 BEGIN
     -- 테이블 잠금은 상품·리뷰 자체의 쓰기만 막는다. 대상 행도 잠가 실행 중에 새 찜·장바구니·신고·피드백이
     -- 붙지 못하게 한다(다른 테이블에 행을 넣을 때의 FK 검사가 이 잠금을 기다린다).
-    -- 분석 피드백 신호는 리뷰가 아니라 분석 피드백을 가리키므로, 대상 리뷰의 분석 피드백 행도 잠근다.
-    -- 리뷰를 먼저 잠갔으므로 이 뒤로는 대상 리뷰에 새 분석 피드백이 붙지 않는다.
+    -- 분석 피드백 신호는 리뷰가 아니라 분석 피드백을 가리키므로, 대상 리뷰·상품의 분석 피드백 행도 잠근다.
+    -- 상품·리뷰를 먼저 잠갔으므로 이 뒤로는 대상 리뷰나 대상 상품(외부 리뷰 대상)에 새 분석 피드백이 붙지 않는다.
     PERFORM 1 FROM products WHERE id IN (SELECT id FROM dummy_products) ORDER BY id FOR UPDATE;
     PERFORM 1 FROM reviews WHERE id IN (SELECT id FROM dummy_reviews) ORDER BY id FOR UPDATE;
-    PERFORM 1 FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews) ORDER BY id FOR UPDATE;
+    PERFORM 1 FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews)
+        OR product_id IN (SELECT id FROM dummy_products) ORDER BY id FOR UPDATE;
 
     SELECT COUNT(*) INTO ticketed FROM ticketed_in_range;
     IF ticketed > 0 THEN
@@ -278,10 +283,13 @@ BEGIN
     SELECT COUNT(*) INTO products_before FROM products;
     SELECT COUNT(*) INTO users_before FROM users;
 
-    -- 간접 FK: 분석 피드백 신호 -> 분석 피드백 -> 리뷰
+    -- 간접 FK: 분석 피드백 신호 -> 분석 피드백 -> 리뷰 또는 상품.
+    -- 외부 리뷰 분석 피드백은 review_id 없이 product_id 만 가진다.
     DELETE FROM analysis_feedback_signals WHERE feedback_id IN
-        (SELECT id FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews));
-    DELETE FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews);
+        (SELECT id FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews)
+            OR product_id IN (SELECT id FROM dummy_products));
+    DELETE FROM analysis_feedbacks WHERE review_id IN (SELECT id FROM dummy_reviews)
+        OR product_id IN (SELECT id FROM dummy_products);
     GET DIAGNOSTICS affected = ROW_COUNT;
     RAISE NOTICE 'analysis_feedbacks: % 건 삭제', affected;
 
@@ -340,7 +348,7 @@ UNION ALL SELECT 'reviews (대상 남음)', COUNT(*) FROM reviews WHERE id IN (S
 UNION ALL SELECT 'review_reasons (대상 남음)', COUNT(*) FROM review_reasons
     WHERE review_id IN (SELECT id FROM dummy_reviews)
 UNION ALL SELECT 'analysis_feedbacks (대상 남음)', COUNT(*) FROM analysis_feedbacks
-    WHERE review_id IN (SELECT id FROM dummy_reviews)
+    WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
 UNION ALL SELECT 'review_feedbacks (대상 남음)', COUNT(*) FROM review_feedbacks
     WHERE review_id IN (SELECT id FROM dummy_reviews) OR product_id IN (SELECT id FROM dummy_products)
 UNION ALL SELECT 'reports (대상 남음)', COUNT(*) FROM reports

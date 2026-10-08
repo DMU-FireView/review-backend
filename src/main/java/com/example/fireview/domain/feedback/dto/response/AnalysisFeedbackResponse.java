@@ -23,14 +23,23 @@ public record AnalysisFeedbackResponse(
         AnalysisFeedbackStatus status,
         String statusDescription,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt
+        LocalDateTime updatedAt,
+
+        // Data 서버 리뷰에 대한 피드백일 때만 채워진다
+        String externalReviewId,
+        String productExternalId
 ) {
+    /**
+     * <p>Data 서버 리뷰에 대한 피드백은 {@code reviewId} 와 {@code reviewContent} 가 null 이다.
+     * Spring DB 에 그 리뷰 행이 없고 본문도 복사해 두지 않는다.
+     * 대신 {@code externalReviewId} 와 {@code productExternalId} 로 찾아간다.
+     */
     public static AnalysisFeedbackResponse from(AnalysisFeedback f) {
         return new AnalysisFeedbackResponse(
                 f.getId(),
-                f.getReview().getId(),
-                f.getReview().getContent(),
-                f.getReview().getProduct().getName(),
+                f.reviewIdOrNull(),
+                f.reviewContentOrNull(),
+                f.productNameOrNull(),
                 f.getFeedbackType(),
                 f.getFeedbackType().getDescription(),
                 f.getUserJudgment(),
@@ -41,7 +50,9 @@ public record AnalysisFeedbackResponse(
                 f.getStatus(),
                 f.getStatus().getDescription(),
                 f.getCreatedAt(),
-                f.getUpdatedAt()
+                f.getUpdatedAt(),
+                f.getExternalReviewId(),
+                f.productExternalIdOrNull()
         );
     }
 }

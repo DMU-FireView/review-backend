@@ -56,7 +56,7 @@ public class AdminService {
     public AdminDashboardResponse getDashboard() {
         long totalReviews     = reviewRepository.count();
         long pendingReports   = reportRepository.findByStatus(ReportStatus.PENDING, Pageable.unpaged()).getTotalElements();
-        long pendingFeedbacks = analysisFeedbackRepository.findByStatus(AnalysisFeedbackStatus.SUBMITTED, Pageable.unpaged()).getTotalElements();
+        long pendingFeedbacks = analysisFeedbackRepository.countByStatus(AnalysisFeedbackStatus.SUBMITTED);
         long totalUsers       = userRepository.count();
         long suspicious       = reviewRepository.findSuspiciousReviews(50, Pageable.unpaged()).getTotalElements();
         long danger           = reviewRepository.findByTrustGradeWithProduct(TrustGrade.DANGER, Pageable.unpaged()).getTotalElements();
