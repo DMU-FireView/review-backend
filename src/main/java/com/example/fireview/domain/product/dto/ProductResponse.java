@@ -48,7 +48,10 @@ public record ProductResponse(
         String dataPlatform,               // 수집기 이름 (kurly, oliveyoung ...). 소문자
         String dataProductId,              // 쇼핑몰 원본 상품 ID
         String externalId,                 // "{dataPlatform}-{dataProductId}". 챗봇 productId 에 그대로 넣는다
-        AnalysisStatus analysisStatus      // v2 상세에서 마지막으로 본 분석 상태. 아직 못 봤으면 null
+        AnalysisStatus analysisStatus,     // Data에서 마지막으로 확인한 분석 상태
+        Boolean analysisSampled,
+        Integer analysisReviewCount,
+        Integer analysisSourceReviewCount
 ) {
     /**
      * 네이버 쇼핑 검색 결과 아이템 → ProductResponse 변환.
@@ -90,7 +93,7 @@ public record ProductResponse(
                 item.mallName().isBlank() ? "NAVER" : item.mallName(),
                 item.link(),                    // AI 분석 요청 시 productUrl로 사용
                 null, null, null,
-                null
+                null, null, null, null
         );
     }
 
@@ -137,7 +140,10 @@ public record ProductResponse(
                 product.getDataPlatform(),
                 product.getDataProductId(),
                 product.dataServerExternalId(),
-                product.getAnalysisStatus()
+                product.getAnalysisStatus(),
+                product.getAnalysisSampled(),
+                product.getAnalysisReviewCount(),
+                product.getAnalysisSourceReviewCount()
         );
     }
 

@@ -9,6 +9,7 @@ import com.example.fireview.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,18 +46,16 @@ public class ProductService {
      * <p>Data 서버 상품이 하나라도 있으면 그것만 보여준다. 더미와 섞으면 사용자가 진짜와
      * 가짜를 구분할 수 없다. 아직 하나도 없을 때만 기존 더미를 보여준다 — 빈 홈보다는 낫다.
      *
-     * <p>Data 서버에는 "수집된 상품 전체 목록" API 가 없어서, 검색으로 들어와 번호표가
-     * 붙은 상품이 홈의 원천이다. 홈 자동 채우기({@code HomeCatalogRefresher})와 사용자 검색으로
-     * 쌓인다.
+     * <p>Data 상품·분석 카탈로그 동기화와 홈 자동 검색·사용자 검색으로 표시 상품을 채운다.
      *
-     * <p>최근 300건에서 대분류별로 번갈아 100건을 고른다. 최근 순으로만 자르면 마지막 검색
+     * <p>분석 완료 상품을 우선한 후보300건에서 대분류별로 번갈아100건을 고른다. 최근 순으로만 자르면 마지막 검색
      * 키워드 두세 개가 홈을 다 차지한다. 분류가 없는 상품도 한 묶음으로 끼워 넣는다.
      *
      * <p>캐시는 검색·상세 조회로 표시 정보가 바뀔 때 {@code ProductTagRegistry} 가 비운다.
      */
     @Cacheable(value = "productList", key = "'all'")
     public List<ProductResponse> getAllProducts() {
-        List<Product> fromDataServer = productRepository.findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();
+        List<Product> fromDataServer = productRepository.findHomeCatalogCandidates(PageRequest.of(0, 300));
         List<Product> source = fromDataServer.isEmpty()
                 ? productRepository.findAll()
                 : mixByMajorCategory(fromDataServer, HOME_SIZE);

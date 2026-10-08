@@ -3,6 +3,7 @@ package com.example.fireview.domain.product.repository;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.Product;
 import org.springframework.data.domain.Limit;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -50,7 +51,8 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     @Modifying
     @Query("""
             UPDATE Product p
-            SET p.analysisStatus = :status, p.analysisStatusAt = :observedAt
+            SET p.analysisStatus = :status, p.analysisStatusAt = :observedAt,
+                p.avgRti = CASE WHEN :status = 'DONE' THEN p.avgRti ELSE NULL END
             WHERE p.dataPlatform = :dataPlatform AND p.dataProductId = :dataProductId
               AND (p.analysisStatus IS NULL OR p.analysisStatus <> :status)
             """)
@@ -59,8 +61,30 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
                              @Param("status") String status,
                              @Param("observedAt") LocalDateTime observedAt);
 
+    /** 목록용 분석 요약만 갱신해 동시 검색의 표시 정보와 충돌하지 않는다. */
+    @Modifying
+    @Query("""
+            UPDATE Product p SET p.analysisStatus = :status, p.analysisStatusAt = :observedAt,
+                p.avgRti = :avgRti, p.analysisSampled = :sampled,
+                p.analysisReviewCount = :reviewCount, p.analysisSourceReviewCount = :sourceReviewCount
+            WHERE p.dataPlatform = :dataPlatform AND p.dataProductId = :dataProductId
+            """)
+    int updateAnalysisSummary(@Param("dataPlatform") String platform,
+            @Param("dataProductId") String productId, @Param("status") String status,
+            @Param("observedAt") LocalDateTime observedAt, @Param("avgRti") Double avgRti,
+            @Param("sampled") Boolean sampled, @Param("reviewCount") Integer reviewCount,
+            @Param("sourceReviewCount") Integer sourceReviewCount);
+
     /** 홈 목록 후보. Data 서버 상품만, 최근에 들어온 순. 이 중에서 분야를 섞어 고른다 */
     List<Product> findTop300ByDataPlatformIsNotNullOrderByCreatedAtDesc();
+
+    /** 분석 완료 상품을 먼저 가져와 새 검색 상품이 홈 전체를 대기로 바꾸지 않게 한다. */
+    @Query("""
+            SELECT p FROM Product p WHERE p.dataPlatform IS NOT NULL
+            ORDER BY CASE WHEN p.analysisStatus = 'DONE' THEN 0 ELSE 1 END,
+                p.createdAt DESC, p.id DESC
+            """)
+    List<Product> findHomeCatalogCandidates(Pageable pageable);
 
     /**
      * 챗봇 추천 후보. 같은 카테고리의 Data 서버 상품 중 가격이 범위 안인 것을 리뷰 많은 순으로.

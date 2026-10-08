@@ -97,7 +97,7 @@ public class Product {
      * v2 상세를 열 때 Data 서버에서 마지막으로 본 신뢰도 분석 상태. <b>아직 못 봤으면 null 이다.</b>
      *
      * <p>목록은 상품마다 Data 서버를 부를 수 없어 이 값을 그대로 보여준다. 원본은 Data 서버이고,
-     * 누군가 상세를 열어야 갱신되므로 실제 상태보다 늦을 수 있다.
+     * 카탈로그 동기화와 상세 조회가 갱신하며 최대 동기화 주기만큼 늦을 수 있다.
      * {@link AnalysisStatus#UNAVAILABLE}(Data 미도달·구버전)은 적지 않는다 — 일시 장애가
      * 마지막으로 본 상태를 지우면 안 된다.
      *
@@ -117,6 +117,11 @@ public class Product {
     /** {@link #analysisStatus} 가 지금 값으로 바뀐 것을 처음 본 시각. 같은 상태를 다시 봐도 고치지 않는다 */
     @Column(name = "analysis_status_at")
     private LocalDateTime analysisStatusAt;
+
+    /** 목록 RTI 평균의 표본 여부와 분석 당시 원본·선택 건수. 원본은 Data 서버다. */
+    private Boolean analysisSampled;
+    private Integer analysisReviewCount;
+    private Integer analysisSourceReviewCount;
 
     /** 멀티 플랫폼 구매 링크 (NAVER, COUPANG, 11ST 등) */
     @ElementCollection(fetch = FetchType.LAZY)

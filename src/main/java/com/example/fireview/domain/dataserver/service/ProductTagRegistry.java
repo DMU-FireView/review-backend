@@ -3,6 +3,7 @@ package com.example.fireview.domain.dataserver.service;
 import com.example.fireview.domain.dataserver.DataServerCategoryMapper;
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.dataserver.dto.DataServerCatalogPage;
 import com.example.fireview.domain.dataserver.dto.response.AnalysisStatus;
 import com.example.fireview.domain.product.entity.Category;
 import com.example.fireview.domain.product.entity.PlatformLink;
@@ -72,8 +73,8 @@ public class ProductTagRegistry {
      * <p><b>표시용 캐시다.</b> 홈·검색 목록은 상품 20개를 보여줄 때 Data 서버를 20번 부를 수
      * 없어서 이름·가격·이미지·카테고리·리뷰 수·구매 링크만 이 행에 적어 둔다. 원본은
      * 여전히 Data 서버이고, 검색·상세 조회 때마다 다시 덮이므로 잠깐 낡을 수는 있어도
-     * 오래 어긋나지 않는다. 리뷰와 신뢰도 점수는 적어 두지 않는다
-     * (분석 <i>상태</i>만 {@link #recordAnalysisStatus} 가 따로 적는다).
+     * 오래 어긋나지 않는다. 리뷰 원본은 저장하지 않는다. 최신 분석 상태·실제 평균·표본 범위는
+     * 별도 카탈로그 동기화가 기록한다.
      *
      * <p>몰 카테고리 원문은 {@code subCategory} 에 그대로 두고, 그 원문과 상품명으로
      * {@code Category} 를 분류해 넣는다({@link DataServerCategoryMapper}). 분류 근거가 없으면
@@ -167,6 +168,38 @@ public class ProductTagRegistry {
                 .map(this::upsertForDisplay)
                 .map(ProductResponse::from)
                 .toList();
+    }
+
+    /** 네트워크 조회가 끝난 페이지의 표시 정보와 분석 요약만 짧게 저장한다. */
+    @Transactional
+    @CacheEvict(value = "productList", allEntries = true)
+    public int upsertCatalogPage(java.util.List<DataServerCatalogPage.Entry> entries) {
+        int saved = 0;
+        for (var entry : entries) {
+            if (entry == null || entry.product() == null || entry.analysis() == null) continue;
+            var p = entry.product();
+            var a = entry.analysis();
+            AnalysisStatus status = AnalysisStatus.from(a.status());
+            if (!hasText(p.platform()) || !hasText(p.productId()) || status == AnalysisStatus.UNAVAILABLE) continue;
+            if (a.reviewCount() == null || a.sourceReviewCount() == null || a.scoredReviewCount() == null
+                    || a.reviewCount() < 0 || a.reviewCount() > 500 || a.scoredReviewCount() < 0
+                    || a.scoredReviewCount() > a.reviewCount() || a.sourceReviewCount() < a.reviewCount()
+                    || a.sampled() == null || a.sampled() != (a.sourceReviewCount() > a.reviewCount())) {
+                log.warn("[DataCatalog] 분석 범위가 잘못된 상품을 건너뛴다 - {}/{}", p.platform(), p.productId());
+                continue;
+            }
+            Double avg = status == AnalysisStatus.DONE ? a.avgRti() : null;
+            if (status == AnalysisStatus.DONE && ((avg == null && a.scoredReviewCount() != 0)
+                    || (avg != null && (!Double.isFinite(avg) || avg < 0 || avg > 100 || a.scoredReviewCount() == 0)))) {
+                log.warn("[DataCatalog] 분석 평균이 잘못된 상품을 건너뛴다 - {}/{}", p.platform(), p.productId());
+                continue;
+            }
+            upsertForDisplay(p);
+            productRepository.updateAnalysisSummary(p.platform(), p.productId(), status.name(),
+                    LocalDateTime.now(), avg, a.sampled(), a.reviewCount(), a.sourceReviewCount());
+            saved++;
+        }
+        return saved;
     }
 
     private static String truncate(String value, int max) {
