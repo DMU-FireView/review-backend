@@ -289,17 +289,23 @@ category  categoryDisplayName  majorCategory  majorCategoryDisplayName
 
 ---
 
-## 5. 신고 · 리뷰 피드백
+## 5. 신고 · 리뷰 피드백 · 분석 피드백
 
 v2 로 조회한 리뷰는 전용 경로를 씁니다. 요청 본문은 기존과 같습니다.
 
 ```
 POST /api/reports/external/{platform}/{productId}/reviews/{externalReviewId}
 POST /api/reviews/external/{platform}/{productId}/reviews/{externalReviewId}/feedback
+POST /api/analysis-feedbacks/external/{platform}/{productId}/reviews/{externalReviewId}
 ```
 
-`externalReviewId` 는 `reviews.items[].reviewId` 를 그대로 넣습니다.
+`externalReviewId` 는 `reviews.items[].reviewId`(분석 결과의 `reviewId` 와 같은 값)를 그대로 넣습니다.
+문자열 그대로 보내고 숫자로 바꾸지 않습니다. 최대 200자.
 **번호표가 없으면 자동으로 발급되므로 `tag` 를 따로 부를 필요 없습니다.**
+
+분석 피드백은 서버가 **그 리뷰에 분석 결과가 있는지 확인하지 않습니다**(Data 서버에 단건 확인 API 가 없음).
+분석 결과(`rti`·`level` 등)가 있는 리뷰에서만 "분석 피드백" 버튼을 보여 주세요.
+같은 리뷰에 여러 번 제출할 수 있는 것은 기존 경로와 같습니다.
 
 ### 조회할 때 — 리뷰 본문이 안 옵니다
 
@@ -315,6 +321,10 @@ Spring DB 에 그 리뷰 행이 없고, 본문을 클라이언트에게 받으�
 
 내역 화면에서는 상품명으로 가리키고, 리뷰 본문이 필요하면 상품 상세로 들어가야 합니다.
 **기존 Spring 리뷰에 대한 신고·피드백은 전과 동일하게** 본문까지 내려옵니다.
+
+분석 피드백 응답(내 목록·단건, 관리자 검수 목록·처리)과 통합 내역(`/api/feedback/me` 의 `reviewContent`)도
+같은 규칙입니다. 관리자 화면에서 `reviewId` 를 0, `reviewContent` 를 빈 문자열로 바꿔 담으면 외부 행과
+"본문이 빈 Spring 리뷰" 를 구분할 수 없으니 null 그대로 다뤄 주세요.
 
 ---
 

@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
  * 신고 + 분석 피드백 통합 조회 응답
  *
  * 피드백 내역 화면에서 유형에 관계없이 한 목록으로 표시하기 위한 DTO.
+ * Data 서버 리뷰를 대상으로 한 신고·분석 피드백은 {@code reviewContent} 가 null 이다.
  */
 public record UnifiedFeedbackResponse(
         Long id,
@@ -51,8 +52,8 @@ public record UnifiedFeedbackResponse(
                 f.getId(),
                 "ANALYSIS_FEEDBACK",
                 f.getFeedbackType().getDescription(),
-                f.getReview().getProduct().getName(),
-                f.getReview().getContent(),
+                f.productNameOrNull(),
+                f.reviewContentOrNull(),
                 f.getStatus().name(),
                 f.getStatus().getDescription(),
                 step, 4,

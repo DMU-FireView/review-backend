@@ -107,6 +107,10 @@ class RemoveDummyProductsSqlTest {
         persist(AnalysisFeedback.builder().submitter(user).review(dummyReview)
                 .feedbackType(AnalysisFeedbackType.SCORE_MISMATCH)
                 .relatedSignals(new ArrayList<>(List.of("repetition"))).build());
+        // 외부 리뷰 분석 피드백은 review_id 없이 상품 번호표(product_id)만 가리킨다
+        persist(AnalysisFeedback.builder().submitter(user).product(blank).externalReviewId("ext-3")
+                .feedbackType(AnalysisFeedbackType.EXPLANATION_INSUFFICIENT)
+                .relatedSignals(new ArrayList<>(List.of("ad"))).build());
         persist(ReviewFeedback.builder().review(dummyReview).user(user).feedbackType(FeedbackType.REAL).build());
         persist(ReviewFeedback.builder().product(blank).externalReviewId("ext-1").user(user)
                 .feedbackType(FeedbackType.REAL).build());
@@ -119,6 +123,9 @@ class RemoveDummyProductsSqlTest {
 
         // 실제 상품에 붙은 행은 남아야 한다
         persist(Wishlist.builder().user(user).product(real).build());
+        persist(AnalysisFeedback.builder().submitter(user).product(real).externalReviewId("ext-4")
+                .feedbackType(AnalysisFeedbackType.SCORE_MISMATCH)
+                .relatedSignals(new ArrayList<>(List.of("repetition"))).build());
         persist(Report.builder().reporter(user).review(realReview).reason(ReportReason.OTHER).build());
         Review naverCachedReview = persist(review(naverCached));
         persist(Wishlist.builder().user(user).product(naverCached).build());
@@ -135,8 +142,10 @@ class RemoveDummyProductsSqlTest {
         assertThat(count("SELECT COUNT(*) FROM reviews")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM review_reasons")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM product_platform_links")).isEqualTo(1);
-        assertThat(count("SELECT COUNT(*) FROM analysis_feedbacks")).isZero();
-        assertThat(count("SELECT COUNT(*) FROM analysis_feedback_signals")).isZero();
+        // 실제 상품에 붙은 외부 리뷰 분석 피드백만 남는다
+        assertThat(em.createNativeQuery("SELECT external_review_id FROM analysis_feedbacks").getResultList())
+                .containsExactly("ext-4");
+        assertThat(count("SELECT COUNT(*) FROM analysis_feedback_signals")).isEqualTo(1);
         assertThat(count("SELECT COUNT(*) FROM review_feedbacks")).isZero();
         assertThat(count("SELECT COUNT(*) FROM reports")).isEqualTo(2);
         assertThat(count("SELECT COUNT(*) FROM wishlists")).isEqualTo(2);
@@ -175,7 +184,7 @@ class RemoveDummyProductsSqlTest {
         while (fk.find()) {
             expected.add(fk.group(1) + "." + fk.group(2) + " -> " + fk.group(3) + ".id");
         }
-        assertThat(expected).hasSize(12);
+        assertThat(expected).hasSize(13);
 
         // 점검 대상 테이블(targets 의 to_regclass 목록) = 이 파일이 DELETE 하는 테이블
         String targets = guard.substring(0, guard.indexOf("]::OID[]"));
