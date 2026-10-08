@@ -3,6 +3,7 @@ package com.example.fireview.domain.dataserver.client;
 import com.example.fireview.domain.dataserver.DataServerProductKey;
 import com.example.fireview.domain.dataserver.dto.DataServerJob;
 import com.example.fireview.domain.dataserver.dto.DataServerProduct;
+import com.example.fireview.domain.dataserver.dto.DataServerCatalogPage;
 import com.example.fireview.domain.dataserver.dto.DataServerProductResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -65,6 +66,23 @@ public class DataServerClient {
         return !baseUrl.isBlank();
     }
 
+    /** 리뷰 본문 없이 상품과 최신 분석 요약을 페이지 단위로 읽는다. */
+    public Optional<DataServerCatalogPage> findCatalog(String cursor) {
+        if (!isConfigured()) return Optional.empty();
+        URI uri = UriComponentsBuilder.fromUriString(baseUrl)
+                .path("/api/v1/catalog").queryParam("limit", 100)
+                .queryParamIfPresent("cursor", Optional.ofNullable(cursor))
+                .build().encode().toUri();
+        try {
+            return Optional.ofNullable(restTemplate.exchange(uri,
+                    org.springframework.http.HttpMethod.GET,
+                    new HttpEntity<>(headers()), DataServerCatalogPage.class).getBody());
+        } catch (RestClientException e) {
+            log.warn("[DataCatalog] 상품·분석 목록 조회 실패: {}", e.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
     /**
      * 상품과 리뷰 첫 페이지를 가져온다.
      *
@@ -114,7 +132,7 @@ public class DataServerClient {
     /**
      * 쇼핑몰 한 곳에서 키워드로 상품을 찾는다.
      *
-     * <p>{@code GET /{platform}/search} 는 저장하지 않고 쇼핑몰을 바로 조회한다.
+     * <p>{@code GET /{platform}/search} 는 검색 상품을 Data에 등록하고 리뷰 수집을 예약한다.
      * 이름만 보면 느릴 것 같지만 운영에서 재보니 컬리 240ms, 올리브영 475ms, 무신사 636ms,
      * 11번가 698ms 였다. 브라우저 기반 수집기(오늘의집·네이버 등)는 실패하거나 수십 초가
      * 걸리므로 호출할 플랫폼은 설정으로 고른다.
