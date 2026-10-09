@@ -67,7 +67,7 @@ class OAuth2SuccessHandlerCookieTest {
     }
 
     @Test
-    void 리프레시_저장소가_죽어도_리다이렉트는_성공하고_쿠키만_빠진다() throws Exception {
+    void 리프레시_저장소가_죽어도_리다이렉트는_성공하고_기존_쿠키를_지운다() throws Exception {
         User user = User.builder().id(12L).email("down@fireview.com").nickname("장애")
                 .provider(OAuthProvider.NAVER).build();
         JwtTokenProvider jwt = mock(JwtTokenProvider.class);
@@ -89,6 +89,9 @@ class OAuth2SuccessHandlerCookieTest {
         assertThat(response.getRedirectedUrl())
                 .startsWith("https://re-view.kr/auth/callback?")
                 .contains("accessToken=access.jwt.token");
-        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE)).isEmpty();
+        // 새 토큰은 없고, 이 브라우저에 남은 이전 계정 쿠키는 지운다
+        assertThat(response.getHeaders(HttpHeaders.SET_COOKIE))
+                .singleElement()
+                .satisfies(h -> assertThat(h).startsWith("review_rt=;").contains("Max-Age=0"));
     }
 }

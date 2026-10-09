@@ -16,7 +16,7 @@
 | `POST /api/auth/login`, `/signup` | 기존 `LoginResponse` 그대로 + `Set-Cookie: review_rt` (앱이면 쿠키 대신 본문 `refreshToken`, 1-1절) |
 | `POST /api/auth/refresh` | 새 `LoginResponse`(같은 모양) + 받은 경로로 회전된 값 / 실패 시 401 `REFRESH_TOKEN_INVALID` + 쿠키 삭제 / 저장소 장애 시 503 |
 | `POST /api/auth/logout` | 리프레시 토큰(그 로그인의 패밀리) 폐기 + 쿠키 삭제. 토큰이 없어도 200 / 저장소 장애 시 503 |
-| OAuth 성공 302 | 기존 쿼리 `accessToken` 그대로 + `Set-Cookie: review_rt` (저장소 장애 시 쿠키 생략) |
+| OAuth 성공 302 | 기존 쿼리 `accessToken` 그대로 + `Set-Cookie: review_rt` (저장소 장애 시 새 쿠키 대신 기존 쿠키 삭제) |
 | `POST /api/auth/password/reset` 성공 | 그 사용자의 모든 리프레시 토큰 폐기 |
 | `DELETE /api/users/me` (탈퇴) | 그 사용자의 모든 리프레시 토큰 폐기 |
 
@@ -144,7 +144,7 @@ Future<String?> _refreshOnce(Dio dio) {
   `Origin`·`Sec-Fetch-*` 헤더는 보내지 않는다(1-1절).
 - 저장은 보안 저장소(iOS Keychain / Android Keystore, 예: `flutter_secure_storage`). `SharedPreferences` 금지.
 - refresh: `POST /api/auth/refresh` + 본문 `{"refreshToken":"..."}`(헤더는 있어도 없어도 된다). 응답의 새 `refreshToken` 으로 **반드시 교체** 저장.
-- 로그인 응답에 `refreshToken` 이 없을 수 있다(리프레시 저장소 장애, 5-1절). 그때는 액세스 토큰만 저장하고, 만료되면 다시 로그인시킨다.
+- 로그인 응답에 `refreshToken` 이 없을 수 있다(리프레시 저장소 장애, 3-1절). 그때는 **저장해 둔 이전 `refreshToken` 을 지우고** 액세스 토큰만 저장하며, 만료되면 다시 로그인시킨다.
 - 로그아웃: `POST /api/auth/logout` + 본문 `{"refreshToken":"..."}`.
 - 401 처리 규칙은 웹과 같다(동시 요청 단일화, 1회 재시도, 실패 시 로그아웃).
 - 앱 OAuth 는 현재 웹 콜백 흐름을 쓰므로 쿠키로만 받는다. 앱 전용 OAuth 흐름이 생기면 별도로 다룬다.
@@ -156,11 +156,14 @@ Future<String?> _refreshOnce(Dio dio) {
 
 | 경로 | 저장소 장애 시 | 이유 |
 |------|---------------|------|
-| 로그인·회원가입·OAuth (처음 발급) | **성공**. 액세스 토큰만 주고 리프레시 토큰(쿠키·본문)은 생략. WARN 로그(userId·예외 종류만) | 새 세션을 만드는 것이라 리프레시가 없어도 잃는 게 없다. 그 세션은 액세스 토큰 만료와 함께 끝난다 |
+| 로그인·회원가입·OAuth (처음 발급) | **성공**. 액세스 토큰만 주고 리프레시 토큰(쿠키·본문)은 생략. 웹은 **기존 `review_rt` 쿠키를 삭제**(`Max-Age=0`). WARN 로그(userId·예외 종류만) | 새 세션을 만드는 것이라 리프레시가 없어도 잃는 게 없다. 그 세션은 액세스 토큰 만료와 함께 끝난다 |
 | refresh | **503 `AUTH_SESSION_UNAVAILABLE`**, 쿠키 유지 | 401 이면 프론트가 로그아웃시키고 쿠키도 지워져, 저장소가 돌아와도 살아 있던 세션을 못 쓴다 |
 | logout | **503**, 쿠키 유지 | 폐기를 확인할 수 없는데 200 을 주면(fail-open) 폐기했다고 믿은 토큰이 30분 동안 살아 있다. 다시 시도할 수 있게 쿠키를 남긴다 |
 | 비밀번호 재설정·탈퇴의 전체 폐기 | **503**, 트랜잭션 롤백 | 다른 기기 세션을 끊지 못한 채 비밀번호만 바뀌는 상태를 만들지 않는다 |
 
+- 처음 발급이 장애로 생략될 때 기존 쿠키를 지우는 이유: 이 브라우저에 다른 계정(A)의 쿠키가 남아 있는 채로 B 로 로그인하면,
+  복구 뒤 refresh 가 A 의 토큰을 돌려줘 사용자가 모르게 계정이 바뀐다(#213 재리뷰). 앱은 로그인 응답에 `refreshToken` 이
+  없으면 저장해 둔 이전 값을 지워야 한다.
 - 저장소 예외는 Spring 의 `DataAccessException`(Redis 연결 실패·타임아웃 등)으로 판단한다(`RefreshTokenService.withStore`).
 - 로그에는 토큰 원문·해시·예외 메시지를 남기지 않고 예외 클래스 이름만 남긴다(Lua 인자가 메시지에 섞일 수 있다).
 - refresh 도중 소비는 됐는데 새 값 저장에서 장애가 나면 503 이고 옛 값은 "소비됨" 상태로 남는다. 15초 유예 안의 재시도는

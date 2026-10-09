@@ -58,14 +58,14 @@ class AuthSessionStoreOutageTest {
     }
 
     @Test
-    void 회원가입은_성공하고_쿠키만_빠진다() throws Exception {
+    void 회원가입은_성공하고_새_쿠키_대신_기존_쿠키를_지운다() throws Exception {
         MvcResult result = signup()
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
                 .andReturn();
 
-        assertNoRefreshCookie(result);
+        assertClearsRefreshCookie(result);
         // 저장소 실패가 가입 트랜잭션을 되돌리지 않는다
         assertThat(userRepository.existsByEmail(email)).isTrue();
     }
@@ -79,7 +79,7 @@ class AuthSessionStoreOutageTest {
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
                 .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
                 .andReturn();
-        assertNoRefreshCookie(web);
+        assertClearsRefreshCookie(web);
 
         MvcResult app = login("app")
                 .andExpect(status().isOk())
@@ -87,6 +87,23 @@ class AuthSessionStoreOutageTest {
                 .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
                 .andReturn();
         assertNoRefreshCookie(app);
+    }
+
+    @Test
+    void 장애_중_다른_계정으로_로그인하면_이전_계정의_쿠키를_지운다() throws Exception {
+        // 이 브라우저에 다른 계정(A)의 쿠키가 남아 있다. 장애 중 B 로 로그인한 뒤 그 쿠키가 살아 있으면
+        // 복구 뒤 refresh 가 A 의 토큰을 돌려준다
+        signup().andExpect(status().isCreated());
+
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .cookie(new Cookie(COOKIE, "token-of-account-a"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andReturn();
+
+        assertClearsRefreshCookie(result);
     }
 
     @Test
@@ -126,6 +143,13 @@ class AuthSessionStoreOutageTest {
             request.header("X-Client-Platform", platform);
         }
         return mockMvc.perform(request);
+    }
+
+    private static void assertClearsRefreshCookie(MvcResult result) {
+        assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                .filteredOn(h -> h.startsWith(COOKIE + "="))
+                .singleElement()
+                .satisfies(h -> assertThat(h).startsWith(COOKIE + "=;").contains("Max-Age=0"));
     }
 
     private static void assertNoRefreshCookie(MvcResult result) {

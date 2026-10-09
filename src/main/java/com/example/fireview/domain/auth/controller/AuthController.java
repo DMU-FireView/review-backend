@@ -151,11 +151,16 @@ public class AuthController {
         return respondWithCookie(result, response);
     }
 
-    /** 리프레시 토큰은 쿠키로만 준다. 본문에는 절대 싣지 않는다 */
+    /**
+     * 리프레시 토큰은 쿠키로만 준다. 본문에는 절대 싣지 않는다.
+     *
+     * <p>저장소 장애로 새 토큰이 없으면 기존 쿠키를 지운다. 남겨 두면 이 브라우저에 있던 다른 계정의
+     * 쿠키가 살아 있다가 복구 뒤 refresh 에서 그 계정으로 바뀐다.
+     */
     private LoginResponse respondWithCookie(AuthResult result, HttpServletResponse response) {
-        if (result.hasRefreshToken()) {
-            response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookies.issue(result.refreshToken()));
-        }
+        response.addHeader(HttpHeaders.SET_COOKIE, result.hasRefreshToken()
+                ? refreshTokenCookies.issue(result.refreshToken())
+                : refreshTokenCookies.clear());
         return result.response();
     }
 
