@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 /**
  * 로그인·회원가입·refresh 응답 본문.
  *
- * <p>{@code refreshToken} 은 모바일 앱({@code X-Client-Platform: app})에만 채운다.
+ * <p>{@code refreshToken} 은 네이티브 앱 응답에만 채운다(AuthController 의 경로 규칙 참고).
  * 웹은 HttpOnly 쿠키로만 받으므로 null 이고, null 이면 JSON 에서 아예 빠진다.
  */
 public record LoginResponse(

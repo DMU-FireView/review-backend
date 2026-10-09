@@ -82,8 +82,12 @@ public class AuthService {
         refreshTokenService.revoke(refreshToken);
     }
 
+    /** 리프레시 저장소 장애면 액세스 토큰만으로 로그인시킨다({@link RefreshTokenService#tryIssue}) */
     private AuthResult issueSession(User user) {
-        return new AuthResult(toLoginResponse(user), refreshTokenService.issue(user));
+        LoginResponse response = toLoginResponse(user);
+        return refreshTokenService.tryIssue(user)
+                .map(token -> new AuthResult(response, token))
+                .orElseGet(() -> AuthResult.withoutRefreshToken(response));
     }
 
     private LoginResponse toLoginResponse(User user) {

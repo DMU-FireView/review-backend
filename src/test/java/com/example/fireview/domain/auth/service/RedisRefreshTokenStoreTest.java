@@ -119,6 +119,24 @@ class RedisRefreshTokenStoreTest {
     }
 
     @Test
+    void 저장할_때_가리키는_키가_사라진_인덱스_멤버를_정리한다() {
+        RefreshTokenRecord a = new RefreshTokenRecord(7L, "fam-a");
+        store.save("a1", a, Instant.now(), TTL, false);
+        store.consume("a1", Instant.now(), TTL);
+        store.save("a2", a, Instant.now(), TTL, true);
+        // a1 의 used 표시가 만료된 상황, 끝난 패밀리 fam-old 가 사용자 Set 에 남은 상황을 만든다
+        redis.delete("rt:used:a1");
+        redis.opsForSet().add("rt:user:7", "fam-old");
+
+        store.consume("a2", Instant.now(), TTL);
+        store.save("a3", a, Instant.now(), TTL, true);
+
+        // a2 는 used 표시가 살아 있어 남고(유예·재사용 판단·폐기 대상), a1 은 지워진다
+        assertThat(redis.opsForSet().members("rt:fam:fam-a")).containsExactlyInAnyOrder("a2", "a3");
+        assertThat(redis.opsForSet().members("rt:user:7")).containsExactly("fam-a");
+    }
+
+    @Test
     void 서비스로_발급하면_원문은_어떤_키에도_나타나지_않는다() {
         RefreshTokenService service = new RefreshTokenService(store, null, TTL, Duration.ofSeconds(15));
 

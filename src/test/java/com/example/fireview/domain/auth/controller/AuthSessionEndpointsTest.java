@@ -99,14 +99,56 @@ class AuthSessionEndpointsTest {
     }
 
     @Test
-    void 앱_헤더가_있으면_본문에도_리프레시_토큰을_싣는다() throws Exception {
+    void 네이티브_앱이면_본문으로만_주고_쿠키는_심지_않는다() throws Exception {
         MvcResult result = login("app")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
                 .andReturn();
 
-        String bodyToken = data(result).get("refreshToken").asText();
-        assertThat(bodyToken).isEqualTo(cookieValue(result));
+        assertThat(data(result).get("refreshToken").asText()).hasSize(43);
+        assertNoRefreshCookie(result);
+    }
+
+    @Test
+    void 브라우저_Origin_이_있으면_앱_헤더가_있어도_본문에_싣지_않는다() throws Exception {
+        MvcResult result = mockMvc.perform(loginRequest()
+                        .header("X-Client-Platform", "app")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:3000"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andReturn();
+
+        assertThat(cookieValue(result)).hasSize(43);
+    }
+
+    @Test
+    void Fetch_Metadata_가_있으면_앱_헤더가_있어도_본문에_싣지_않는다() throws Exception {
+        MvcResult result = mockMvc.perform(loginRequest()
+                        .header("X-Client-Platform", "app")
+                        .header("Sec-Fetch-Site", "same-origin")
+                        .header("Sec-Fetch-Mode", "cors"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andReturn();
+
+        assertThat(cookieValue(result)).hasSize(43);
+    }
+
+    @Test
+    void 회원가입도_브라우저_요청이면_앱_헤더가_있어도_본문에_싣지_않는다() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/signup")
+                        .header("X-Client-Platform", "app")
+                        .header("Sec-Fetch-Site", "same-origin")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"web-%s","password":"%s","nickname":"웹가입"}
+                                """.formatted(email, PASSWORD)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andReturn();
+
+        assertThat(cookieValue(result)).hasSize(43);
     }
 
     // ── refresh ────────────────────────────────────────────────────────────
@@ -139,7 +181,7 @@ class AuthSessionEndpointsTest {
     }
 
     @Test
-    void 앱은_본문_refreshToken_으로_refresh_하고_본문으로_새_값을_받는다() throws Exception {
+    void 앱은_본문_refreshToken_으로_refresh_하고_본문으로만_새_값을_받는다() throws Exception {
         String token = data(login("app").andReturn()).get("refreshToken").asText();
 
         MvcResult result = mockMvc.perform(post("/api/auth/refresh")
@@ -150,6 +192,24 @@ class AuthSessionEndpointsTest {
                 .andReturn();
 
         assertThat(data(result).get("refreshToken").asText()).hasSize(43).isNotEqualTo(token);
+        assertNoRefreshCookie(result);
+    }
+
+    @Test
+    void 쿠키로_refresh_하면_앱_헤더를_붙여도_본문에_토큰을_싣지_않는다() throws Exception {
+        // 웹 XSS 가 fetch('/api/auth/refresh', {headers:{'X-Client-Platform':'app'}}) 로
+        // HttpOnly 쿠키 값을 읽어 가던 경로(#213 리뷰 P2-1)
+        String old = cookieValue(login(null).andReturn());
+
+        MvcResult result = mockMvc.perform(post("/api/auth/refresh")
+                        .header("X-Client-Platform", "app")
+                        .cookie(new Cookie(COOKIE, old)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accessToken").isNotEmpty())
+                .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+                .andReturn();
+
+        assertThat(cookieValue(result)).hasSize(43).isNotEqualTo(old);
     }
 
     @Test
@@ -219,13 +279,22 @@ class AuthSessionEndpointsTest {
     // ── helpers ────────────────────────────────────────────────────────────
 
     private ResultActions login(String platform) throws Exception {
-        MockHttpServletRequestBuilder request = post("/api/auth/login")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD));
+        MockHttpServletRequestBuilder request = loginRequest();
         if (platform != null) {
             request.header("X-Client-Platform", platform);
         }
         return mockMvc.perform(request);
+    }
+
+    private MockHttpServletRequestBuilder loginRequest() {
+        return post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD));
+    }
+
+    private static void assertNoRefreshCookie(MvcResult result) {
+        assertThat(result.getResponse().getHeaders(HttpHeaders.SET_COOKIE))
+                .noneMatch(h -> h.startsWith(COOKIE + "="));
     }
 
     private void expectRefreshRejected(ResultActions result) throws Exception {

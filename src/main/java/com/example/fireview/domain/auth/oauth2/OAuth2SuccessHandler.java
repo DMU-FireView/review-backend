@@ -44,8 +44,10 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         // 리프레시 토큰은 쿼리에 싣지 않고 쿠키로만 준다(주소는 기록·Referer 로 샌다).
         // 콜백은 re-view.kr/login/oauth2/code/* 로 들어와 Vercel rewrite 로 백엔드에 닿으므로,
         // 이 302 의 Set-Cookie 는 브라우저에게 re-view.kr 이 심은 첫 출처 쿠키가 된다.
-        // 이후 re-view.kr/api/auth/refresh 호출(같은 rewrite)에 그대로 실린다
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookies.issue(refreshTokenService.issue(user)));
+        // 이후 re-view.kr/api/auth/refresh 호출(같은 rewrite)에 그대로 실린다.
+        // 리프레시 저장소 장애면 쿠키 없이 기존처럼 액세스 토큰만으로 로그인시킨다(tryIssue 참고)
+        refreshTokenService.tryIssue(user)
+                .ifPresent(refreshToken -> response.addHeader(HttpHeaders.SET_COOKIE, refreshTokenCookies.issue(refreshToken)));
 
         log.info("OAuth2 로그인 성공 - provider: {}, email: {}, nickname: {}, 온보딩 완료: {}",
                 user.getProvider(), user.getEmail(), user.getNickname(), user.isOnboardingCompleted());

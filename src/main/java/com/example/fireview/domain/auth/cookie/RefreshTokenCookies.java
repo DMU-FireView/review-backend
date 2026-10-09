@@ -19,10 +19,11 @@ import java.util.Optional;
  * 호스트 전용 쿠키가 된다. 그래서 api.re-view.kr 이나 다른 서브도메인으로는 새지 않는다.
  *
  * <p><b>CSRF</b>: 쿠키만으로 인증하는 엔드포인트는 POST /api/auth/refresh·logout 둘뿐이다.
- * SameSite=Lax 는 다른 사이트에서 시작된 POST(폼·fetch)에 쿠키를 싣지 않으므로 이것으로 막는다.
- * 같은 사이트 안에서 위조되더라도 refresh 의 결과(새 액세스 토큰)는 CORS 를 통과한 출처만 읽을 수
- * 있고, 쿠키는 브라우저가 알아서 새 값으로 갈아끼우므로 공격자가 얻는 것이 없다. logout 위조는
- * 강제 로그아웃뿐이다. 그래서 Origin/Referer 검사는 더하지 않았다.
+ * SameSite=Lax 는 다른 사이트에서 시작된 POST(폼·fetch)에 쿠키를 싣지 않는다. 같은 사이트의 다른
+ * 서브도메인은 Lax 로 막히지 않고, Spring Security CORS 가 허용 목록 밖 Origin 의 요청을 컨트롤러 전에
+ * 403 으로 거부해서 막힌다. 그래서 CORS 허용 목록에 서브도메인을 넣으면 그 출처는 위조할 수 있다.
+ * refresh 결과(새 액세스 토큰)는 CORS 를 통과한 출처만 읽을 수 있고, 쿠키로 온 refresh 의 응답
+ * 본문에는 리프레시 토큰을 싣지 않는다(AuthController). logout 위조는 강제 로그아웃뿐이다.
  */
 @Component
 public class RefreshTokenCookies {

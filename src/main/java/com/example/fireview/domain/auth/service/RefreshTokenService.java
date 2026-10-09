@@ -7,6 +7,7 @@ import com.example.fireview.domain.user.repository.UserRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -18,7 +19,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * 리프레시 토큰 발급·회전·폐기 정책.
@@ -37,6 +40,11 @@ import java.util.UUID;
  *
  * <p><b>재사용 탐지</b>: 유예를 넘겨 소비된 값이 다시 오면 탈취로 보고 그 패밀리 전체를 폐기한다.
  * 정상 사용자도 다음 refresh 에서 401 을 받아 다시 로그인하게 되지만, 탈취자의 세션도 함께 끊긴다.
+ *
+ * <p><b>저장소 장애</b>: 저장소 예외는 {@link RefreshTokenStoreUnavailableException}(503)으로 바꾼다.
+ * 401 로 내보내면 살아 있는 세션까지 끊기기 때문이다. 처음 발급하는 경로(로그인·회원가입·OAuth)만
+ * {@link #tryIssue} 로 리프레시 없이 진행할 수 있다. refresh·logout·전체 폐기는 성공으로 덮지 않는다
+ * (fail-open 이면 폐기했다고 믿은 세션이 살아남는다).
  */
 @Slf4j
 @Service
@@ -68,12 +76,34 @@ public class RefreshTokenService {
         this.clock = clock;
     }
 
-    /** 로그인 성공 시 새 패밀리로 발급한다. 반환값은 원문이다 */
+    /**
+     * 로그인 성공 시 새 패밀리로 발급한다. 반환값은 원문이다.
+     *
+     * @throws RefreshTokenStoreUnavailableException 저장소에 쓰지 못했을 때
+     */
     public String issue(User user) {
         RefreshTokenRecord record = new RefreshTokenRecord(user.getId(), UUID.randomUUID().toString());
         String token = newToken();
-        store.save(hash(token), record, clock.instant(), ttl, false);
+        withStore(() -> store.save(hash(token), record, clock.instant(), ttl, false));
         return token;
+    }
+
+    /**
+     * 처음 로그인할 때 쓴다. 저장소 장애면 리프레시 토큰 없이 빈 값을 돌려준다.
+     *
+     * <p>리프레시 저장소가 생기기 전에는 로그인이 DB·JWT 만으로 끝났다. 저장소 장애 하나로
+     * 정상 자격 증명 로그인·OAuth 까지 막히면 기존보다 가용성이 나빠지므로, 액세스 토큰만으로
+     * 로그인은 성공시킨다. 그 세션은 액세스 토큰 만료와 함께 끝나고 다시 로그인하면 된다.
+     * 이미 있는 세션을 다루는 refresh·logout 에는 이 완화를 쓰지 않는다.
+     */
+    public Optional<String> tryIssue(User user) {
+        try {
+            return Optional.of(issue(user));
+        } catch (RefreshTokenStoreUnavailableException e) {
+            log.warn("[RefreshToken] 저장소 장애로 리프레시 토큰 없이 로그인시킨다 - userId={}, cause={}",
+                    user.getId(), e.getCause().getClass().getSimpleName());
+            return Optional.empty();
+        }
     }
 
     /**
@@ -86,16 +116,16 @@ public class RefreshTokenService {
             throw new InvalidRefreshTokenException();
         }
         Instant now = clock.instant();
-        RefreshTokenRecord record = resolveForRotation(store.consume(hash(token), now, ttl), now);
+        RefreshTokenRecord record = resolveForRotation(withStore(() -> store.consume(hash(token), now, ttl)), now);
 
         User user = userRepository.findById(record.userId()).orElseThrow(() -> {
             // 탈퇴 등으로 사용자가 사라졌다. 남은 세션도 정리한다
-            store.revokeAll(record.userId());
+            withStore(() -> store.revokeAll(record.userId()));
             return new InvalidRefreshTokenException();
         });
 
         String next = newToken();
-        if (!store.save(hash(next), record, now, ttl, true)) {
+        if (!withStore(() -> store.save(hash(next), record, now, ttl, true))) {
             // 소비와 저장 사이에 전체 폐기(비밀번호 재설정 등)가 끼어들었다
             throw new InvalidRefreshTokenException();
         }
@@ -107,17 +137,20 @@ public class RefreshTokenService {
         if (token == null || token.isBlank()) {
             return;
         }
-        Consumed consumed = store.consume(hash(token), clock.instant(), ttl);
+        Consumed consumed = withStore(() -> store.consume(hash(token), clock.instant(), ttl));
         if (consumed instanceof Consumed.Live live) {
-            store.revokeFamily(live.record());
+            withStore(() -> store.revokeFamily(live.record()));
         } else if (consumed instanceof Consumed.Used used) {
-            store.revokeFamily(used.record());
+            withStore(() -> store.revokeFamily(used.record()));
         }
     }
 
-    /** 사용자의 모든 리프레시 토큰을 폐기한다. 비밀번호 재설정·회원 탈퇴 시 */
+    /**
+     * 사용자의 모든 리프레시 토큰을 폐기한다. 비밀번호 재설정·회원 탈퇴 시.
+     * 저장소 장애면 503 으로 실패시켜 호출한 트랜잭션(비밀번호 변경·탈퇴)도 되돌린다.
+     */
     public void revokeAll(Long userId) {
-        store.revokeAll(userId);
+        withStore(() -> store.revokeAll(userId));
     }
 
     public Duration getTtl() {
@@ -134,9 +167,26 @@ public class RefreshTokenService {
             }
             log.warn("[RefreshToken] 유예를 넘긴 재사용 감지. 패밀리를 폐기한다 - userId={}, familyId={}",
                     used.record().userId(), used.record().familyId());
-            store.revokeFamily(used.record());
+            withStore(() -> store.revokeFamily(used.record()));
         }
         throw new InvalidRefreshTokenException();
+    }
+
+    /** 저장소 예외(연결 실패·타임아웃 등)를 503 으로 바꾼다. 메시지에 키가 섞일 수 있어 예외 종류만 남긴다 */
+    private <T> T withStore(Supplier<T> action) {
+        try {
+            return action.get();
+        } catch (DataAccessException e) {
+            log.warn("[RefreshToken] 저장소 접근 실패 - cause={}", e.getClass().getSimpleName());
+            throw new RefreshTokenStoreUnavailableException(e);
+        }
+    }
+
+    private void withStore(Runnable action) {
+        withStore(() -> {
+            action.run();
+            return null;
+        });
     }
 
     private String newToken() {

@@ -25,8 +25,13 @@ import java.util.List;
  * </pre>
  *
  * <p>인덱스 Set 의 TTL 은 가장 최근에 저장한 토큰의 TTL 과 같다. 그 안의 토큰은 모두 그보다
- * 먼저 만료되므로, 인덱스가 사라질 때 살아 있는 토큰이 남지 않는다. Set 에 만료된 해시가
- * 남아 있을 수 있지만 DEL 이 없는 키를 지우는 것뿐이라 무해하다.
+ * 먼저 만료되므로, 인덱스가 사라질 때 살아 있는 토큰이 남지 않는다.
+ *
+ * <p>인덱스 키는 저장할 때마다 TTL 이 늘어나서, 계속 활동하는 사용자는 키가 만료되지 않는다.
+ * 그러면 회전할 때마다 패밀리 Set 에 지난 해시가, 사용자 Set 에 끝난 패밀리 ID 가 무한히 쌓이고
+ * 폐기 스크립트의 SMEMBERS/DEL 도 그만큼 느려진다. 그래서 저장할 때 가리키는 키가 이미 사라진
+ * 멤버(live·used 둘 다 없는 해시, 패밀리 키가 없는 패밀리 ID)를 같이 지운다. 남는 멤버는
+ * 최근 TTL 안에 저장·소비된 것뿐이라 크기가 TTL 동안의 회전·로그인 수로 묶인다.
  *
  * <p>모든 상태 변경은 Lua 스크립트 하나로 실행돼 원자적이다. 스크립트 안에서 키 이름을
  * 만들기 때문에 Redis Cluster 에서는 쓸 수 없다(운영은 단일 노드).
@@ -42,10 +47,20 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
     static final String FAMILY_PREFIX = "rt:fam:";
     static final String USER_PREFIX = "rt:user:";
 
-    /** KEYS: live, family, user / ARGV: value, ttlMs, hash, familyId, requireFamily */
+    /** KEYS: live, family, user / ARGV: value, ttlMs, hash, familyId, requireFamily, livePrefix, usedPrefix, familyPrefix */
     private static final RedisScript<Long> SAVE = new DefaultRedisScript<>("""
             if ARGV[5] == '1' and redis.call('EXISTS', KEYS[2]) == 0 then
               return 0
+            end
+            for _, h in ipairs(redis.call('SMEMBERS', KEYS[2])) do
+              if redis.call('EXISTS', ARGV[6] .. h, ARGV[7] .. h) == 0 then
+                redis.call('SREM', KEYS[2], h)
+              end
+            end
+            for _, f in ipairs(redis.call('SMEMBERS', KEYS[3])) do
+              if f ~= ARGV[4] and redis.call('EXISTS', ARGV[8] .. f) == 0 then
+                redis.call('SREM', KEYS[3], f)
+              end
             end
             redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
             redis.call('SADD', KEYS[2], ARGV[3])
@@ -103,7 +118,8 @@ public class RedisRefreshTokenStore implements RefreshTokenStore {
                 String.valueOf(ttl.toMillis()),
                 tokenHash,
                 record.familyId(),
-                requireFamily ? "1" : "0");
+                requireFamily ? "1" : "0",
+                LIVE_PREFIX, USED_PREFIX, FAMILY_PREFIX);
         return saved != null && saved == 1L;
     }
 

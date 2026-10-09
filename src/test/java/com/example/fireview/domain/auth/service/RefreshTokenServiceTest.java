@@ -6,6 +6,7 @@ import com.example.fireview.domain.user.entity.User;
 import com.example.fireview.domain.user.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.redis.RedisConnectionFailureException;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -24,7 +25,11 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -236,6 +241,34 @@ class RefreshTokenServiceTest {
 
         assertThat(store.save("h2", record, clock.instant(), TTL, true)).isFalse();
         assertThat(store.containsKey("h2")).isFalse();
+    }
+
+    // ── 저장소 장애 ────────────────────────────────────────────────────────
+
+    @Test
+    void 저장소_장애면_첫_발급은_빈_값이고_refresh_logout_전체폐기는_503_예외다() {
+        RefreshTokenStore broken = mock(RefreshTokenStore.class);
+        RedisConnectionFailureException down = new RedisConnectionFailureException("redis down");
+        when(broken.save(anyString(), any(), any(), any(), anyBoolean())).thenThrow(down);
+        when(broken.consume(anyString(), any(), any())).thenThrow(down);
+        doThrow(down).when(broken).revokeAll(anyLong());
+        RefreshTokenService outage = new RefreshTokenService(broken, userRepository, TTL, GRACE, clock);
+
+        assertThat(outage.tryIssue(user)).isEmpty();
+        assertThatThrownBy(() -> outage.issue(user)).isInstanceOf(RefreshTokenStoreUnavailableException.class);
+        // 401(InvalidRefreshTokenException)로 바뀌면 살아 있는 세션까지 끊긴다
+        assertThatThrownBy(() -> outage.rotate("token"))
+                .isInstanceOf(RefreshTokenStoreUnavailableException.class)
+                .isNotInstanceOf(InvalidRefreshTokenException.class);
+        assertThatThrownBy(() -> outage.revoke("token")).isInstanceOf(RefreshTokenStoreUnavailableException.class);
+        assertThatThrownBy(() -> outage.revokeAll(7L)).isInstanceOf(RefreshTokenStoreUnavailableException.class);
+    }
+
+    @Test
+    void 저장소가_정상이면_tryIssue_는_회전_가능한_값을_준다() {
+        String token = service.tryIssue(user).orElseThrow();
+
+        assertThat(service.rotate(token).user()).isEqualTo(user);
     }
 
     private void assertInvalid(String token) {
