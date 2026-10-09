@@ -1,5 +1,6 @@
 package com.example.fireview.domain.auth.service;
 
+import com.example.fireview.domain.auth.dto.AuthResult;
 import com.example.fireview.domain.auth.dto.LoginRequest;
 import com.example.fireview.domain.auth.dto.LoginResponse;
 import com.example.fireview.domain.auth.dto.PasswordResetRequest;
@@ -29,6 +30,7 @@ public class AuthService {
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordResetTokenStore resetTokenStore;
     private final EmailService emailService;
+    private final RefreshTokenService refreshTokenService;
 
     @Value("${app.mail.from:noreply@re-view.kr}")
     private String mailFrom;
@@ -37,7 +39,7 @@ public class AuthService {
     private String passwordResetBaseUrl;
 
     @Transactional
-    public LoginResponse signup(SignupRequest request) {
+    public AuthResult signup(SignupRequest request) {
         if (userRepository.existsByEmail(request.email())) {
             throw new CustomException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
@@ -51,11 +53,10 @@ public class AuthService {
                 .build();
         User saved = userRepository.save(user);
 
-        String token = jwtTokenProvider.generateToken(saved);
-        return new LoginResponse(token, saved.getEmail(), saved.getNickname(), saved.getRole(), false);
+        return issueSession(saved);
     }
 
-    public LoginResponse login(LoginRequest request) {
+    public AuthResult login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new CustomException(ErrorCode.INVALID_CREDENTIALS));
 
@@ -63,6 +64,29 @@ public class AuthService {
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
         }
 
+        return issueSession(user);
+    }
+
+    /**
+     * 리프레시 토큰을 회전하고 새 액세스 토큰을 발급한다. 본문 모양은 로그인 응답과 같다.
+     *
+     * @throws InvalidRefreshTokenException 토큰이 무효이거나 사용자가 없을 때
+     */
+    public AuthResult refresh(String refreshToken) {
+        RefreshTokenService.Rotation rotation = refreshTokenService.rotate(refreshToken);
+        return new AuthResult(toLoginResponse(rotation.user()), rotation.refreshToken());
+    }
+
+    /** 로그아웃. 토큰이 없거나 이미 무효여도 성공으로 본다 */
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
+    }
+
+    private AuthResult issueSession(User user) {
+        return new AuthResult(toLoginResponse(user), refreshTokenService.issue(user));
+    }
+
+    private LoginResponse toLoginResponse(User user) {
         String token = jwtTokenProvider.generateToken(user);
         return new LoginResponse(token, user.getEmail(), user.getNickname(), user.getRole(), user.isOnboardingCompleted());
     }
@@ -91,5 +115,7 @@ public class AuthService {
 
         user.setPassword(passwordEncoder.encode(request.newPassword()));
         userRepository.save(user);
+        // 비밀번호가 바뀌었으니 다른 기기에 남은 로그인 세션을 모두 끊는다
+        refreshTokenService.revokeAll(user.getId());
     }
 }

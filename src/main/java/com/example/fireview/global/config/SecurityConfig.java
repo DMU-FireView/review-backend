@@ -61,7 +61,7 @@ public class SecurityConfig {
         this.bearerTokenEntryPoint = bearerTokenEntryPoint;
         this.authorizationRequestRepository = authorizationRequestRepository;
         this.serviceTokenFilter = serviceTokenFilter;
-        this.allowedOriginPatterns = allowedOriginPatterns;
+        this.allowedOriginPatterns = requireExplicitOrigins(allowedOriginPatterns);
         this.frontendRedirectUri = frontendRedirectUri;
     }
 
@@ -157,6 +157,23 @@ public class SecurityConfig {
             return List.<GrantedAuthority>of(new SimpleGrantedAuthority("ROLE_" + role));
         });
         return converter;
+    }
+
+    /**
+     * allowCredentials=true 와 "*" 패턴을 함께 쓰면 Spring 은 요청 Origin 을 그대로 되돌려 주므로
+     * 아무 사이트나 자격 증명(리프레시 쿠키 포함)을 실은 요청의 응답을 읽을 수 있게 된다.
+     * allowedOrigins 와 달리 allowedOriginPatterns 는 이 조합을 막지 않아서 기동 시 직접 막는다.
+     * "http://localhost:*" 처럼 호스트가 고정된 포트 패턴은 허용한다.
+     */
+    static List<String> requireExplicitOrigins(List<String> patterns) {
+        for (String pattern : patterns) {
+            String trimmed = pattern.trim();
+            if (trimmed.equals("*") || trimmed.matches("https?://\\*")) {
+                throw new IllegalStateException(
+                        "app.cors.allowed-origins(CORS_ALLOWED_ORIGINS) 에 와일드카드 출처를 쓸 수 없다: " + trimmed);
+            }
+        }
+        return patterns;
     }
 
     @Bean
