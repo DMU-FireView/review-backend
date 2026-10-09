@@ -12,6 +12,8 @@ public enum ErrorCode {
     INVALID_RESET_TOKEN(HttpStatus.BAD_REQUEST, "유효하지 않은 비밀번호 재설정 토큰입니다."),
     EXPIRED_RESET_TOKEN(HttpStatus.BAD_REQUEST, "만료된 비밀번호 재설정 토큰입니다. 다시 요청해주세요."),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
+    REFRESH_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "로그인 세션이 만료되었습니다. 다시 로그인해주세요."),
+    AUTH_SESSION_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "로그인 세션을 일시적으로 확인할 수 없습니다. 잠시 후 다시 시도해주세요."),
 
     // Product
     PRODUCT_NOT_FOUND(HttpStatus.NOT_FOUND, "상품을 찾을 수 없습니다."),

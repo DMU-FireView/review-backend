@@ -44,6 +44,7 @@ https://www.re-view.kr
 ```
 
 `allowCredentials: true`, 노출 헤더 `Authorization`. 목록에 없는 오리진은 브라우저가 차단한다.
+`CORS_ALLOWED_ORIGINS` 에 `*` 같은 와일드카드 출처를 넣으면 서버가 기동하지 않는다(자격 증명과 함께 쓸 수 없다).
 
 ### 인증
 
@@ -53,8 +54,12 @@ JWT Bearer 토큰. 로그인/소셜로그인으로 받은 `accessToken`을 헤�
 Authorization: Bearer <accessToken>
 ```
 
-- 만료: 24시간 (`jwt.expiration-ms=86400000`)
-- 리프레시 토큰 없음 — 만료되면 재로그인
+- 액세스 토큰 만료: 환경변수 `JWT_EXPIRATION_MS` (기본 24시간, 프론트 refresh 연동 후 15분 = `900000` 목표)
+- 로그인 세션: 리프레시 토큰. **30분 동안 refresh 가 없으면 만료**(유휴 만료), refresh 마다 회전
+  - 웹: HttpOnly 쿠키 `review_rt` (`Path=/api/auth; Secure; SameSite=Lax`) — JS 에서 읽을 수 없다
+  - 앱: 로그인·회원가입에 `X-Client-Platform: app` 을 붙이고 `Origin`·`Sec-Fetch-*` 가 없으면 쿠키 대신 본문 `refreshToken` 으로 받는다.
+    refresh 는 토큰이 들어온 경로(쿠키/본문)로만 새 값을 돌려준다 — 쿠키로 온 요청에는 헤더와 무관하게 본문 토큰이 없다
+  - 연동 방법·배포 순서: [`auth-session.md`](./auth-session.md)
 - 토큰의 `sub` 는 사용자 이메일, `role` 클레임으로 권한 판정
 
 ---
@@ -127,6 +132,8 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 | `INVALID_RESET_TOKEN` | 400 | 유효하지 않은 재설정 토큰 |
 | `EXPIRED_RESET_TOKEN` | 400 | 만료된 재설정 토큰 |
 | `UNAUTHORIZED` | 401 | 로그인 필요 |
+| `REFRESH_TOKEN_INVALID` | 401 | 리프레시 토큰 없음·만료·폐기·재사용. 응답이 쿠키도 지운다 → 로그아웃 처리 |
+| `AUTH_SESSION_UNAVAILABLE` | 503 | 리프레시 저장소(Redis) 장애로 refresh·logout 을 처리할 수 없음. 쿠키 유지 → 로그아웃시키지 말고 나중에 재시도 |
 | `PRODUCT_NOT_FOUND` | 404 | 상품 없음 |
 | `PRODUCT_NOT_COLLECTED` | 409 | Data 서버가 아직 상품을 수집하지 못함 |
 | `DATA_SERVER_UNAVAILABLE` | 503 | Data 서버에 연결 실패 |
@@ -166,8 +173,15 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 |--------|------|------|
 | POST | `/api/auth/signup` | 회원가입 |
 | POST | `/api/auth/login` | 로그인 |
+| POST | `/api/auth/refresh` | 세션 연장 — 새 액세스 토큰 + 리프레시 토큰 회전 |
+| POST | `/api/auth/logout` | 로그아웃 — 리프레시 토큰 폐기 + 쿠키 삭제 (멱등 200, 저장소 장애 시만 503) |
 | POST | `/api/auth/password/reset-request` | 비밀번호 재설정 메일 요청 |
-| POST | `/api/auth/password/reset` | 비밀번호 재설정 |
+| POST | `/api/auth/password/reset` | 비밀번호 재설정 (성공 시 그 사용자의 모든 세션 폐기) |
+
+웹의 로그인·회원가입·refresh 응답에는 `Set-Cookie: review_rt=...` 가 붙고 본문 `LoginResponse` 는 기존과 같다.
+리프레시 토큰은 언제나 한 경로로만 나간다 — 웹은 쿠키, 앱(`X-Client-Platform: app` + 브라우저 헤더 없음, 또는
+본문 `refreshToken` 으로 refresh)은 본문 `refreshToken` 만(Set-Cookie 없음).
+리프레시 저장소 장애 시 로그인·회원가입은 성공하되 리프레시 토큰이 빠진다(쿠키·본문 모두 없음).
 
 **POST `/api/auth/signup`** — `SignupRequest`
 
@@ -192,6 +206,11 @@ Spring Data `Page` 를 그대로 직렬화한다. 요청은 쿼리 파라미터.
 }
 ```
 
+**POST `/api/auth/refresh`** — 본문 없음(웹, 쿠키 사용) 또는 `{ "refreshToken": "..." }`(앱) → `LoginResponse`
+
+실패 시 401 `REFRESH_TOKEN_INVALID` + `Set-Cookie: review_rt=; Max-Age=0`. 재시도하지 말고 로그아웃 처리한다.
+503 `AUTH_SESSION_UNAVAILABLE` 이면 쿠키를 지우지 않으니 로그아웃시키지 말고 나중에 다시 시도한다.
+
 **POST `/api/auth/password/reset`** — `PasswordResetRequest`
 
 ```json
@@ -213,6 +232,8 @@ GET https://api.re-view.kr/oauth2/authorization/naver
 https://re-view.kr/oauth2/callback
   ?accessToken=...&tokenType=Bearer&email=...&nickname=...
 ```
+
+이 302 응답에 리프레시 쿠키(`review_rt`)도 함께 심긴다. 리프레시 토큰은 쿼리로 주지 않는다.
 
 실패 시:
 

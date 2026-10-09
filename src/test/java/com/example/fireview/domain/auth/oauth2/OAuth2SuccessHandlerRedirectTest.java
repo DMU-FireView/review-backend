@@ -31,7 +31,7 @@ class OAuth2SuccessHandlerRedirectTest {
 
     @BeforeEach
     void setUp() {
-        handler = new OAuth2SuccessHandler(null);
+        handler = new OAuth2SuccessHandler(null, null, null);
         handler.setFrontendRedirectUri(FRONTEND);
     }
 
